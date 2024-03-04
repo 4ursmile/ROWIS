@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 from torch.cuda.amp import autocast
 from scipy.optimize import linear_sum_assignment
 from fvcore.nn import sigmoid_focal_loss_jit
@@ -58,6 +59,7 @@ class SparseInstCriterion(nn.Module):
         self.losses = cfg.MODEL.SPARSE_INST.LOSS.ITEMS
         self.weight_dict = self.get_weight_dict(cfg)
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
+        self.min_obj = -(cfg.MODEL.SPARSE_INST.DECODER.INST.DIM*cfg.MODEL.SPARSE_INST.DECODER.GROUPS)*math.log(0.9)
 
     def get_weight_dict(self, cfg):
         losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness")
@@ -112,7 +114,11 @@ class SparseInstCriterion(nn.Module):
         ) / num_instances
         losses = {'loss_ce': class_loss}
         return losses
-
+    def loss_obj_likelihood(self, outputs, targets, indices, num_instances):
+        assert "pred_obj" in outputs
+        idx = self._get_src_permutation_idx(indices)
+        pred_obj = outputs['pred_obj'][idx]
+        return {'loss_obj_ll': torch.clamp(pred_obj, min = self.min_obj).sum() / num_instances}
     def loss_masks_with_iou_objectness(self, outputs, targets, indices, num_instances, input_shape):
         src_idx = self._get_src_permutation_idx(indices)
         tgt_idx = self._get_tgt_permutation_idx(indices)
@@ -168,6 +174,7 @@ class SparseInstCriterion(nn.Module):
         loss_map = {
             "labels": self.loss_labels,
             "masks": self.loss_masks_with_iou_objectness,
+            "obj_ll": self.loss_obj_likelihood
         }
         if loss == "loss_objectness":
             # NOTE: loss_objectness will be calculated in `loss_masks_with_iou_objectness`
