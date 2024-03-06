@@ -114,7 +114,7 @@ class SparseInstCriterion(nn.Module):
         ) / num_instances
         losses = {'loss_ce': class_loss}
         return losses
-    def loss_obj_likelihood(self, outputs, targets, indices, num_instances):
+    def loss_obj_likelihood(self, outputs, targets, indices, num_instances, input_shape):
         assert "pred_obj" in outputs
         idx = self._get_src_permutation_idx(indices)
         pred_obj = outputs['pred_obj'][idx]
