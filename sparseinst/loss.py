@@ -115,9 +115,9 @@ class SparseInstCriterion(nn.Module):
         losses = {'loss_ce': class_loss}
         return losses
     def loss_obj_likelihood(self, outputs, targets, indices, num_instances, input_shape):
-        assert "pred_obj" in outputs
+        assert "pred_scores" in outputs
         idx = self._get_src_permutation_idx(indices)
-        pred_obj = outputs['pred_obj'][idx]
+        pred_obj = outputs['pred_scores'][idx]
         return {'loss_obj_ll': torch.clamp(pred_obj, min = self.min_obj).sum() / num_instances}
     def loss_masks_with_iou_objectness(self, outputs, targets, indices, num_instances, input_shape):
         src_idx = self._get_src_permutation_idx(indices)
