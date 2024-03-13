@@ -105,7 +105,7 @@ class SparseInst(nn.Module):
         features = self.encoder(features)
         output = self.decoder(features)
 
-        print(output["pred_logits"].shape)
+
         if self.training:
             gt_instances = [x["instances"].to(
                 self.device) for x in batched_inputs]
@@ -163,28 +163,32 @@ class SparseInst(nn.Module):
             top_scores, top_indexes = torch.topk(prob.view(scores_per_image.shape[0], -1), self.pred_per_image, dim=-1)
 
             scores = top_scores
+            top_masks = top_indexes // scores_per_image.shape[2]
             labels = top_indexes % scores_per_image.shape[2]
 
+            mask_pred_per_image = torch.index_select(mask_pred_per_image, 0, top_masks.view(-1)).view(top_masks.shape)
 
 
-            # max/argmax
-            scores, labels = scores_per_image.max(dim=-1)
-            # cls threshold
-            keep = scores > self.cls_threshold
-            scores = scores[keep]
-            labels = labels[keep]
-            mask_pred_per_image = mask_pred_per_image[keep]
 
-            if scores.size(0) == 0:
-                result.scores = scores
-                result.pred_classes = labels
-                results.append(result)
-                continue
 
-            h, w = img_shape
-            # rescoring mask using maskness
-            scores = rescoring_mask(
-                scores, mask_pred_per_image > self.mask_threshold, mask_pred_per_image)
+            # # max/argmax
+            # scores, labels = scores_per_image.max(dim=-1)
+            # # cls threshold
+            # keep = scores > self.cls_threshold
+            # scores = scores[keep]
+            # labels = labels[keep]
+            # mask_pred_per_image = mask_pred_per_image[keep]
+
+            # if scores.size(0) == 0:
+            #     result.scores = scores
+            #     result.pred_classes = labels
+            #     results.append(result)
+            #     continue
+
+            # h, w = img_shape
+            # # rescoring mask using maskness
+            # scores = rescoring_mask(
+            #     scores, mask_pred_per_image > self.mask_threshold, mask_pred_per_image)
 
             # upsample the masks to the original resolution:
             # (1) upsampling the masks to the padded inputs, remove the padding area

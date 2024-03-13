@@ -12,6 +12,8 @@ from detectron2.data import MetadataCatalog, build_detection_train_loader, Datas
 from detectron2.engine import AutogradProfiler, DefaultTrainer, default_argument_parser, default_setup, launch
 from detectron2.evaluation import COCOEvaluator, verify_results
 from detectron2.solver.build import maybe_add_gradient_clipping
+from detectron2.data.datasets import register_coco_instances
+
 from detectron2.evaluation import (
     CityscapesInstanceEvaluator,
     CityscapesSemSegEvaluator,
@@ -157,6 +159,8 @@ def setup(args):
         cfg.SOLVER.IMS_PER_BATCH = 32
         cfg.SOLVER.MAX_ITER = 27000
         cfg.BASE_LR = 5e-5/4 # default batch size is 64
+    cfg.DATASETS.TRAIN = ('minitest_train',)
+    cfg.DATASETS.TEST = ("minitest_val",)   
     cfg.freeze()
     default_setup(cfg, args)
     # Setup logger for "sparseinst" module
@@ -165,6 +169,8 @@ def setup(args):
 
 
 def main(args):
+    for d in ["valid", "train"]:
+      register_coco_instances("minitest_" + d, {}, f"datasets/minitest_{d}/_annotations.coco.json", "datasets/minitest_"+d)
     cfg = setup(args)
 
     if args.eval_only:
