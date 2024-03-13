@@ -56,6 +56,11 @@ class SparseInst(nn.Module):
         self.cls_threshold = cfg.MODEL.SPARSE_INST.CLS_THRESHOLD
         self.mask_threshold = cfg.MODEL.SPARSE_INST.MASK_THRESHOLD
         self.max_detections = cfg.MODEL.SPARSE_INST.MAX_DETECTIONS
+        self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
+
+        self.invalid_cls_logits = list(range(cfg.OWIS.PREV_INTRODUCED_CLS+ cfg.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
+        self.temperature = cfg.OWIS.TEMPERATURE
+        self.pred_per_image = cfg.OWIS.PRED_PER_IMAGE
 
     def normalizer(self, image):
         image = (image - self.pixel_mean) / self.pixel_std
@@ -100,6 +105,7 @@ class SparseInst(nn.Module):
         features = self.encoder(features)
         output = self.decoder(features)
 
+        print(output["pred_logits"].shape)
         if self.training:
             gt_instances = [x["instances"].to(
                 self.device) for x in batched_inputs]
@@ -132,16 +138,35 @@ class SparseInst(nn.Module):
     def inference(self, output, batched_inputs, max_shape, image_sizes):
         # max_detections = self.max_detections
         results = []
+        # pred_scores = output["pred_logits"].sigmoid()
+        # pred_masks = output["pred_masks"].sigmoid()
+        # pred_objectness = output["pred_scores"].sigmoid()
+
         pred_scores = output["pred_logits"].sigmoid()
         pred_masks = output["pred_masks"].sigmoid()
-        pred_objectness = output["pred_scores"].sigmoid()
-        pred_scores = torch.sqrt(pred_scores * pred_objectness)
+        pred_objectness = output["pred_scores"]
+        #pred_scores = torch.sqrt(pred_scores * pred_objectness)
 
-        for _, (scores_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
-                pred_scores, pred_masks, batched_inputs, image_sizes)):
+        obj_prob = torch.exp(-self.temperature * pred_objectness).unsqueeze(-1)
+        pred_scores = torch.sqrt(obj_prob * pred_scores.sidmoid())
+
+        for _, (scores_per_image, obj_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
+                pred_scores,pred_objectness, pred_masks, batched_inputs, image_sizes)):
 
             ori_shape = (batched_input["height"], batched_input["width"])
             result = Instances(ori_shape)
+
+            scores_per_image[:,:, self.invalid_cls_logits] = -10e10
+            obj_prob = torch.exp(-self.temperature * obj_per_image).unsqueeze(-1)
+            prob = torch.sqrt(obj_prob * scores_per_image)
+
+            top_scores, top_indexes = torch.topk(prob.view(scores_per_image.shape[0], -1), self.pred_per_image, dim=-1)
+
+            scores = top_scores
+            labels = top_indexes % scores_per_image.shape[2]
+
+
+
             # max/argmax
             scores, labels = scores_per_image.max(dim=-1)
             # cls threshold

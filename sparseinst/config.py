@@ -25,7 +25,7 @@ def add_sparse_inst_config(cfg):
     cfg.MODEL.SPARSE_INST.DECODER = CN()
     cfg.MODEL.SPARSE_INST.DECODER.NAME = "BaseIAMDecoder"
     cfg.MODEL.SPARSE_INST.DECODER.NUM_MASKS = 100
-    cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES = 80
+    cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES = 81
     # kernels for mask features
     cfg.MODEL.SPARSE_INST.DECODER.KERNEL_DIM = 128
     # upsample factor for output masks
