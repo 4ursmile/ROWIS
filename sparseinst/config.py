@@ -85,4 +85,5 @@ def add_sparse_inst_config(cfg):
     cfg.OWIS.PREV_INTRODUCED_CLS = 0
     cfg.OWIS.CUR_INTRODUCED_CLS = 7
     cfg.OWIS.TEMPERATURE = 1.0
+    cfg.OWIS.PRED_PER_IMAGE = 100
 
