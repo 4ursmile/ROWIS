@@ -152,6 +152,10 @@ def setup(args):
     add_sparse_inst_config(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+    if not args.eval_only:
+        cfg.SOLVER.IMS_PER_BATCH = 32
+        cfg.SOLVER.MAX_ITER = 27000
+        cfg.BASE_LR = 5e-5/4 # default batch size is 64
     cfg.freeze()
     default_setup(cfg, args)
     # Setup logger for "sparseinst" module
