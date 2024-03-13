@@ -58,9 +58,9 @@ class SparseInst(nn.Module):
         self.max_detections = cfg.MODEL.SPARSE_INST.MAX_DETECTIONS
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
 
-        self.invalid_cls_logits = list(range(cfg.OWIS.PREV_INTRODUCED_CLS+ cfg.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
-        self.temperature = cfg.OWIS.TEMPERATURE
-        self.pred_per_image = cfg.OWIS.PRED_PER_IMAGE
+        self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
+        self.temperature = cfg.MODEL.OWIS.TEMPERATURE
+        self.pred_per_image = cfg.MODEL.OWIS.PRED_PER_IMAGE
 
     def normalizer(self, image):
         image = (image - self.pixel_mean) / self.pixel_std
