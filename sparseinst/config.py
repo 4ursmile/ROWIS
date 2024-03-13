@@ -1,6 +1,7 @@
 # Copyright (c) Tianheng Cheng and its affiliates. All Rights Reserved
 
 from detectron2.config import CfgNode as CN
+from detectron2.config import get_cfg
 
 def add_sparse_inst_config(cfg):
 
@@ -77,4 +78,11 @@ def add_sparse_inst_config(cfg):
     cfg.MODEL.CSPNET.NORM = ""
     # (csp-)darknet: csp1, csp2, csp3, csp4
     cfg.MODEL.CSPNET.OUT_FEATURES = ["csp1", "csp2", "csp3", "csp4"]
+
+    #OWIS
+
+    cfg.OWIS = CN()
+    cfg.OWIS.PREV_INTRODUCED_CLS = 0
+    cfg.OWIS.CUR_INTRODUCED_CLS = 7
+    cfg.OWIS.TEMPERATURE = 1.0
 
