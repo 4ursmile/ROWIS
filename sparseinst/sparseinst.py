@@ -154,7 +154,6 @@ class SparseInst(nn.Module):
 
             # max/argmax
             scores, labels = scores_per_image.max(dim=-1)
-            print(scores, labels)
             # cls threshold
             keep = scores > 5e-7
             scores = scores[keep]
