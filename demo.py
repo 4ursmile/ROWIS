@@ -31,10 +31,6 @@ def setup_cfg(args):
     cfg.MODEL.RETINANET.SCORE_THRESH_TEST = args.confidence_threshold
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = args.confidence_threshold
     cfg.MODEL.PANOPTIC_FPN.COMBINE.INSTANCES_CONFIDENCE_THRESH = args.confidence_threshold
-    if not args.eval_only:
-        cfg.SOLVER.IMS_PER_BATCH = 32
-        cfg.SOLVER.MAX_ITER = 27000
-        cfg.BASE_LR = 5e-5/4 # default batch size is 64
     cfg.DATASETS.TRAIN = ('minitest_train',)
     cfg.DATASETS.TEST = ("minitest_valid",) 
     cfg.freeze()
