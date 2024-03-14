@@ -146,8 +146,6 @@ class SparseInst(nn.Module):
         #pred_scores = torch.sqrt(pred_scores * pred_objectness)
         obj_prob = torch.exp(-self.temperature * pred_objectness).unsqueeze(-1)
         pred_scores = obj_prob * torch.sigmoid(pred_scores)
-        print(obj_prob)
-        print(pred_scores)
         for _, (scores_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
                 pred_scores, pred_masks, batched_inputs, image_sizes)):
 
@@ -157,7 +155,7 @@ class SparseInst(nn.Module):
             # max/argmax
             scores, labels = scores_per_image.max(dim=-1)
             # cls threshold
-            keep = scores > self.cls_threshold
+            keep = scores > 5e-9
             scores = scores[keep]
             labels = labels[keep]
             mask_pred_per_image = mask_pred_per_image[keep]
