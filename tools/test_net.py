@@ -76,6 +76,10 @@ class SparseInst(nn.Module):
         self.mask_format = cfg.INPUT.MASK_FORMAT
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
 
+        self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
+        self.temperature = cfg.MODEL.OWIS.TEMPERATURE
+        self.pred_per_image = cfg.MODEL.OWIS.PRED_PER_IMAGE
+
     def forward(self, image, resized_size, ori_size):
         max_size = image.shape[2:]
         features = self.backbone(image)
@@ -97,9 +101,20 @@ class SparseInst(nn.Module):
         """
         result = Instances(ori_shape)
         # scoring
-        pred_logits = outputs["pred_logits"][0].sigmoid()
-        pred_scores = outputs["pred_scores"][0].sigmoid().squeeze()
+        pred_logits = outputs["pred_logits"][0]
+        pred_scores = outputs["pred_scores"][0]
         pred_masks = outputs["pred_masks"][0].sigmoid()
+        pred_logits[:, self.invalid_cls_logits] = -10e10
+
+        obj_prob = torch.exp(-self.temperature*pred_scores).unsqueeze(-1)
+        prob = obj_prob * torch.sigmoid(pred_logits)
+
+        top_k_prob, top_k_idx = torch.topk(prob.view(-1), self.pred_per_image, dim=1)
+        print(top_k_prob, top_k_idx)
+        scores = top_k_prob
+        masks = top_k_idx // pred_logits.shape[1]
+        labels = top_k_idx % pred_logits.shape[1]
+
         # obtain scores
         scores, labels = pred_logits.max(dim=-1)
         # remove by thresholding
@@ -179,9 +194,16 @@ def setup(args):
     Create configs and perform basic setups.
     """
     cfg = get_cfg()
+    cfg.set_new_allowed(True)
     add_sparse_inst_config(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+    if not args.eval_only:
+        cfg.SOLVER.IMS_PER_BATCH = 32
+        cfg.SOLVER.MAX_ITER = 27000
+        cfg.BASE_LR = 5e-5/4 # default batch size is 64
+    cfg.DATASETS.TRAIN = ('minitest_train',)
+    cfg.DATASETS.TEST = ("minitest_valid",)   
     cfg.freeze()
     default_setup(cfg, args)
     return cfg
