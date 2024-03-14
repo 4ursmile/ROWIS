@@ -14,6 +14,7 @@ from detectron2.structures import ImageList, Instances, BitMasks
 from detectron2.engine import default_argument_parser, default_setup
 from detectron2.data import build_detection_test_loader
 from detectron2.evaluation import COCOEvaluator, print_csv_format
+from detectron2.data.datasets import register_coco_instances
 
 sys.path.append(".")
 from sparseinst import build_sparse_inst_encoder, build_sparse_inst_decoder, add_sparse_inst_config
@@ -211,6 +212,11 @@ def setup(args):
 
 
 if __name__ == '__main__':
+
+
+    for d in ["valid", "train"]:
+      register_coco_instances("minitest_" + d, {}, f"datasets/minitest_{d}/_annotations.coco.json", "datasets/minitest_"+d)
+    cfg = setup(args)
 
     args = default_argument_parser()
     args.add_argument("--fp16", action="store_true",
