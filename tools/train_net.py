@@ -3,7 +3,7 @@ import sys
 import itertools
 from typing import Any, Dict, List, Set
 import torch
-
+import os
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
@@ -13,7 +13,6 @@ from detectron2.engine import AutogradProfiler, DefaultTrainer, default_argument
 from detectron2.evaluation import COCOEvaluator, verify_results
 from detectron2.solver.build import maybe_add_gradient_clipping
 from detectron2.data.datasets import register_coco_instances
-
 from detectron2.evaluation import (
     CityscapesInstanceEvaluator,
     CityscapesSemSegEvaluator,
@@ -156,11 +155,9 @@ def setup(args):
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     if not args.eval_only:
-        cfg.SOLVER.IMS_PER_BATCH = 32
-        cfg.SOLVER.MAX_ITER = 27000
-        cfg.BASE_LR = 5e-5/4 # default batch size is 64
-    cfg.DATASETS.TRAIN = ('minitest_train',)
-    cfg.DATASETS.TEST = ("minitest_valid",)   
+        cfg.SOLVER.IMS_PER_BATCH = 64
+        cfg.SOLVER.MAX_ITER = 50000
+        cfg.BASE_LR = 5e-5/2 # default batch size is 64 
     cfg.freeze()
     default_setup(cfg, args)
     # Setup logger for "sparseinst" module
@@ -169,10 +166,10 @@ def setup(args):
 
 
 def main(args):
-    for d in ["valid", "train"]:
-      register_coco_instances("minitest_" + d, {}, f"datasets/minitest_{d}/_annotations.coco.json", "datasets/minitest_"+d)
+    os.system("nvidia-smi")
+    os.system("EXPORT DETECTRON2_DATASETS=/kaggle/input/coco-2017-dataset/")
+    os.system("mv /kaggle/input/coco-2017-dataset/coco2017 /kaggle/input/coco-2017-dataset/coco")
     cfg = setup(args)
-
     if args.eval_only:
         model = Trainer.build_model(cfg)
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
