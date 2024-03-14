@@ -96,37 +96,40 @@ if __name__ == "__main__":
             # use PIL, to be consistent with evaluation
             #             img = read_image(path, format="BGR")
             # OneNet uses RGB input as default
-            img = read_image(path, format="RGB")
-            start_time = time.time()
-            predictions, visualized_output = demo.run_on_image(
-                img, args.confidence_threshold)
-            logger.info(
-                "{}: {} in {:.2f}s".format(
-                    path,
-                    "detected {} instances".format(
-                        len(predictions["instances"]))
-                    if "instances" in predictions
-                    else "finished",
-                    time.time() - start_time,
-                )
-            )
 
-            if args.output:
-                if os.path.isdir(args.output):
-                    assert os.path.isdir(args.output), args.output
-                    out_filename = os.path.join(
-                        args.output, os.path.basename(path))
+            for path_image in os.listdir(path):
+                full_path_image = os.path.join(path, path_image)
+                img = read_image(full_path_image, format="RGB")
+                start_time = time.time()
+                predictions, visualized_output = demo.run_on_image(
+                    img, args.confidence_threshold)
+                logger.info(
+                    "{}: {} in {:.2f}s".format(
+                        path,
+                        "detected {} instances".format(
+                            len(predictions["instances"]))
+                        if "instances" in predictions
+                        else "finished",
+                        time.time() - start_time,
+                    )
+                )
+
+                if args.output:
+                    if os.path.isdir(args.output):
+                        assert os.path.isdir(args.output), args.output
+                        out_filename = os.path.join(
+                            args.output, os.path.basename(path))
+                    else:
+                        assert len(
+                            args.output) > 0, "Please specify a directory with args.output"
+                        out_filename = args.output
+                    visualized_output.save(out_filename)
                 else:
-                    assert len(
-                        args.output) > 0, "Please specify a directory with args.output"
-                    out_filename = args.output
-                visualized_output.save(out_filename)
-            else:
-                cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-                cv2.imshow(
-                    WINDOW_NAME, visualized_output.get_image()[:, :, ::-1])
-                if cv2.waitKey(0) == 27:
-                    break  # esc to quit
+                    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+                    cv2.imshow(
+                        WINDOW_NAME, visualized_output.get_image()[:, :, ::-1])
+                    if cv2.waitKey(0) == 27:
+                        break  # esc to quit
     elif args.webcam:
         assert args.input is None, "Cannot have both --input and --webcam!"
         assert args.output is None, "output not yet supported with --webcam!"
