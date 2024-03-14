@@ -10,6 +10,7 @@ import tqdm
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
 from detectron2.utils.logger import setup_logger
+from detectron2.data.datasets import register_coco_instances
 
 from sparseinst import VisualizationDemo, add_sparse_inst_config
 
@@ -23,12 +24,19 @@ def setup_cfg(args):
     cfg = get_cfg()
     cfg.set_new_allowed(True)
     add_sparse_inst_config(cfg)
+    
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     # Set score_threshold for builtin models
     cfg.MODEL.RETINANET.SCORE_THRESH_TEST = args.confidence_threshold
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = args.confidence_threshold
     cfg.MODEL.PANOPTIC_FPN.COMBINE.INSTANCES_CONFIDENCE_THRESH = args.confidence_threshold
+    if not args.eval_only:
+        cfg.SOLVER.IMS_PER_BATCH = 32
+        cfg.SOLVER.MAX_ITER = 27000
+        cfg.BASE_LR = 5e-5/4 # default batch size is 64
+    cfg.DATASETS.TRAIN = ('minitest_train',)
+    cfg.DATASETS.TEST = ("minitest_valid",) 
     cfg.freeze()
     return cfg
 
@@ -73,6 +81,8 @@ def get_parser():
 
 
 if __name__ == "__main__":
+    for d in ["valid", "train"]:
+      register_coco_instances("minitest_" + d, {}, f"datasets/minitest_{d}/_annotations.coco.json", "datasets/minitest_"+d)
     mp.set_start_method("spawn", force=True)
     args = get_parser().parse_args()
     setup_logger(name="fvcore")
