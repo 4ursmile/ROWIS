@@ -216,8 +216,6 @@ if __name__ == '__main__':
 
     for d in ["valid", "train"]:
       register_coco_instances("minitest_" + d, {}, f"datasets/minitest_{d}/_annotations.coco.json", "datasets/minitest_"+d)
-    cfg = setup(args)
-
     args = default_argument_parser()
     args.add_argument("--fp16", action="store_true",
                       help="support fp16 for inference")
