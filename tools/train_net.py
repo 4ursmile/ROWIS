@@ -160,7 +160,7 @@ def setup(args):
         cfg.SOLVER.MAX_ITER = 27000
         cfg.BASE_LR = 5e-5/4 # default batch size is 64
     cfg.DATASETS.TRAIN = ('minitest_train',)
-    cfg.DATASETS.TEST = ("minitest_val",)   
+    cfg.DATASETS.TEST = ("minitest_valid",)   
     cfg.freeze()
     default_setup(cfg, args)
     # Setup logger for "sparseinst" module
