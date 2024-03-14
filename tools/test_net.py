@@ -112,7 +112,7 @@ class SparseInst(nn.Module):
         prob = obj_prob * torch.sigmoid(pred_logits)
         print(prob.shape)
         print(prob.view(-1))
-        top_k_prob, top_k_idx = torch.topk(prob.view(pred_logits.shape[0], -1), self.pred_per_image if self.pred_per_image < pred_logits.shape[0] else pred_logits.shape[0], dim=1)
+        top_k_prob, top_k_idx = torch.topk(prob.view(pred_logits.shape[0], -1), self.pred_per_image if self.pred_per_image < pred_logits.shape[0] - 1 else pred_logits.shape[0] - 1, dim=1)
         print(top_k_prob, top_k_idx)
         scores = top_k_prob
         masks = top_k_idx // pred_logits.shape[1]
