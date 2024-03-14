@@ -118,7 +118,7 @@ class SparseInst(nn.Module):
         scores = top_k_prob
         masks = top_k_idx // pred_logits.shape[1]
         labels = top_k_idx % pred_logits.shape[1]
-
+        print(masks, labels)
         # obtain scores
         scores, labels = pred_logits.max(dim=-1)
         # remove by thresholding
