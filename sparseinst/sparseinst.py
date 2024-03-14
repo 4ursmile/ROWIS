@@ -136,59 +136,41 @@ class SparseInst(nn.Module):
         return pred_scores, pred_masks
 
     def inference(self, output, batched_inputs, max_shape, image_sizes):
-        # max_detections = self.max_detections
+        #max_detections = self.max_detections
         results = []
-        # pred_scores = output["pred_logits"].sigmoid()
-        # pred_masks = output["pred_masks"].sigmoid()
-        # pred_objectness = output["pred_scores"].sigmoid()
-
-        pred_scores = torch.sigmoid(output["pred_logits"])
-        pred_masks = torch.sigmoid(output["pred_masks"])
+        pred_scores = output["pred_logits"]
+        pred_masks = output["pred_masks"].sigmoid()
         pred_objectness = output["pred_scores"]
+        pred_scores[:,:, self.invalid_cls_logits] = -10e10
+
         #pred_scores = torch.sqrt(pred_scores * pred_objectness)
-
         obj_prob = torch.exp(-self.temperature * pred_objectness).unsqueeze(-1)
-        pred_scores = torch.sqrt(obj_prob * pred_scores)
+        pred_scores = torch.sqrt(obj_prob * torch.sigmoid(pred_scores))
 
-        for _, (scores_per_image, obj_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
-                pred_scores,pred_objectness, pred_masks, batched_inputs, image_sizes)):
+        for _, (scores_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
+                pred_scores, pred_masks, batched_inputs, image_sizes)):
 
             ori_shape = (batched_input["height"], batched_input["width"])
             result = Instances(ori_shape)
 
-            scores_per_image[:,:, self.invalid_cls_logits] = -10e10
-            obj_prob = torch.exp(-self.temperature * obj_per_image).unsqueeze(-1)
-            prob = torch.sqrt(obj_prob * scores_per_image)
+            # max/argmax
+            scores, labels = scores_per_image.max(dim=-1)
+            # cls threshold
+            keep = scores > self.cls_threshold
+            scores = scores[keep]
+            labels = labels[keep]
+            mask_pred_per_image = mask_pred_per_image[keep]
 
-            top_scores, top_indexes = torch.topk(prob.view(scores_per_image.shape[0], -1), self.pred_per_image, dim=-1)
+            if scores.size(0) == 0:
+                result.scores = scores
+                result.pred_classes = labels
+                results.append(result)
+                continue
 
-            scores = top_scores
-            top_masks = top_indexes // scores_per_image.shape[2]
-            labels = top_indexes % scores_per_image.shape[2]
-
-            mask_pred_per_image = torch.index_select(mask_pred_per_image, 0, top_masks.view(-1)).view(top_masks.shape)
-
-
-
-
-            # # max/argmax
-            # scores, labels = scores_per_image.max(dim=-1)
-            # # cls threshold
-            # keep = scores > self.cls_threshold
-            # scores = scores[keep]
-            # labels = labels[keep]
-            # mask_pred_per_image = mask_pred_per_image[keep]
-
-            # if scores.size(0) == 0:
-            #     result.scores = scores
-            #     result.pred_classes = labels
-            #     results.append(result)
-            #     continue
-
-            # h, w = img_shape
-            # # rescoring mask using maskness
-            # scores = rescoring_mask(
-            #     scores, mask_pred_per_image > self.mask_threshold, mask_pred_per_image)
+            h, w = img_shape
+            # rescoring mask using maskness
+            scores = rescoring_mask(
+                scores, mask_pred_per_image > self.mask_threshold, mask_pred_per_image)
 
             # upsample the masks to the original resolution:
             # (1) upsampling the masks to the padded inputs, remove the padding area
