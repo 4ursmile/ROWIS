@@ -111,8 +111,8 @@ class SparseInst(nn.Module):
         obj_prob = torch.exp(-self.temperature*pred_scores).unsqueeze(-1)
         prob = obj_prob * torch.sigmoid(pred_logits)
         print(prob.shape)
-        print(prob.view(pred_logits[0], -1))
-        print(prob.view(pred_logits[0], -1).shape)
+        print(prob.view(pred_logits[0].shape[0], -1))
+        print(prob.view(pred_logits[0].shape[0], -1).shape)
         top_k_prob, top_k_idx = torch.topk(prob.view(pred_logits.shape[0], -1), 10, dim=1)
         print(top_k_prob, top_k_idx)
         scores = top_k_prob
