@@ -62,7 +62,7 @@ class SparseInstCriterion(nn.Module):
         self.min_obj = -(cfg.MODEL.SPARSE_INST.DECODER.INST.DIM*cfg.MODEL.SPARSE_INST.DECODER.GROUPS)*math.log(0.9)
 
     def get_weight_dict(self, cfg):
-        losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness")
+        losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness", )
         weight_dict = {}
         ce_weight = cfg.MODEL.SPARSE_INST.LOSS.CLASS_WEIGHT
         mask_weight = cfg.MODEL.SPARSE_INST.LOSS.MASK_PIXEL_WEIGHT
@@ -119,6 +119,14 @@ class SparseInstCriterion(nn.Module):
         idx = self._get_src_permutation_idx(indices)
         pred_obj = outputs['pred_scores'][idx]
         return {'loss_obj_ll': torch.clamp(pred_obj, min = self.min_obj).sum() / num_instances}
+    def calculate_loss_objectness(self, outputs, targets, indices, num_instances, input_shape):
+        assert "pred_scores" in outputs
+        idx = self._get_src_permutation_idx(indices)
+        pred_obj = outputs['pred_scores'][idx]
+        target_obj = torch.cat([t["scores"][J]
+                                for t, (_, J) in zip(targets, indices)])
+        target_obj = target_obj.flatten(0)
+        return F.binary_cross_entropy_with_logits(pred_obj, target_obj, reduction='mean')
     def loss_masks_with_iou_objectness(self, outputs, targets, indices, num_instances, input_shape):
         src_idx = self._get_src_permutation_idx(indices)
         tgt_idx = self._get_tgt_permutation_idx(indices)
@@ -164,7 +172,7 @@ class SparseInstCriterion(nn.Module):
         src_iou_scores = src_iou_scores.flatten(0)
 
         losses = {
-            "loss_objectness": F.binary_cross_entropy_with_logits(src_iou_scores, tgt_iou_scores, reduction='mean'),
+            "loss_objectness": F.binary_cross_entropy_with_logits(src_iou_scores, tgt_iou_scores, reduction='mean') + self.loss_obj_likelihood(outputs, targets, indices, num_instances, input_shape),
             "loss_dice": dice_loss(src_masks, target_masks) / num_instances,
             "loss_mask": F.binary_cross_entropy_with_logits(src_masks, target_masks, reduction='mean')
         }
@@ -173,8 +181,7 @@ class SparseInstCriterion(nn.Module):
     def get_loss(self, loss, outputs, targets, indices, num_instances, **kwargs):
         loss_map = {
             "labels": self.loss_labels,
-            "masks": self.loss_masks_with_iou_objectness,
-            "obj_ll": self.loss_obj_likelihood
+            "masks": self.loss_masks_with_iou_objectness
         }
         if loss == "loss_objectness":
             # NOTE: loss_objectness will be calculated in `loss_masks_with_iou_objectness`
