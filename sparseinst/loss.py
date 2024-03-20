@@ -118,7 +118,7 @@ class SparseInstCriterion(nn.Module):
         assert "pred_scores" in outputs
         idx = self._get_src_permutation_idx(indices)
         pred_obj = outputs['pred_scores'][idx]
-        return {'loss_obj_ll': torch.clamp(pred_obj, min = self.min_obj).sum() / num_instances}
+        return torch.clamp(pred_obj, min = self.min_obj).sum() / num_instances
     def calculate_loss_objectness(self, outputs, targets, indices, num_instances, input_shape):
         assert "pred_scores" in outputs
         idx = self._get_src_permutation_idx(indices)
