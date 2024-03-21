@@ -144,7 +144,7 @@ class SparseInst(nn.Module):
         pred_scores[:,:, self.invalid_cls_logits] = -10e10
 
         #pred_scores = torch.sqrt(pred_scores * pred_objectness)
-        obj_prob = torch.exp(-self.temperature * pred_objectness).unsqueeze(-1)
+        obj_prob = torch.sigmoid(pred_objectness*self.temperature).unsqueeze(-1)
         pred_scores = torch.sqrt(obj_prob * torch.sigmoid(pred_scores))
         for _, (scores_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
                 pred_scores, pred_masks, batched_inputs, image_sizes)):
