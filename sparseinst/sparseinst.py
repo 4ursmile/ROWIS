@@ -145,11 +145,11 @@ class SparseInst(nn.Module):
         results = []
         pred_scores = output["pred_logits"].sigmoid()
         pred_masks = output["pred_masks"].sigmoid()
-        pred_objectness = output["pred_scores"].sigmoid()
+        pred_objectness = output["pred_scores"]
         pred_prob = output["pred_prob"]
         pred_scores = torch.sqrt(pred_scores * pred_objectness)
-        print(pred_scores)
-        print(pred_scores.max())
+        print(pred_scores.max().unsqueeze(-1))
+        print("-------------------------------------------------------------")
         print(torch.exp(-pred_prob*self.temperature).unsqueeze(-1))
         assert 1 == 0
         # pred_scores[:,:, self.invalid_cls_logits] = -10e10
