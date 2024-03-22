@@ -61,7 +61,8 @@ class SparseInst(nn.Module):
         self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
         self.temperature = cfg.MODEL.OWIS.TEMPERATURE
         self.pred_per_image = cfg.MODEL.OWIS.PRED_PER_IMAGE
-
+        self.temperature = cfg.MODEL.OWIS.TEMPERATURE
+        print(f"invalid_cls_logits: {self.invalid_cls_logits}")
     def normalizer(self, image):
         image = (image - self.pixel_mean) / self.pixel_std
         return image
@@ -130,7 +131,11 @@ class SparseInst(nn.Module):
         pred_scores = output["pred_logits"].sigmoid()
         pred_masks = output["pred_masks"].sigmoid()
         pred_objectness = output["pred_scores"].sigmoid()
+        pred_prob = output["pred_prob"]
         pred_scores = torch.sqrt(pred_scores * pred_objectness)
+        pred_scores[:,:, self.invalid_cls_logits] = -10e10
+        obj_prob = torch.exp(-pred_prob*self.temperature).unsqueeze(-1)
+        pred_scores = obj_prob * pred_scores
         pred_masks = F.interpolate(
             pred_masks, scale_factor=4.0, mode="bilinear", align_corners=False)
         return pred_scores, pred_masks
@@ -138,14 +143,15 @@ class SparseInst(nn.Module):
     def inference(self, output, batched_inputs, max_shape, image_sizes):
         #max_detections = self.max_detections
         results = []
-        pred_scores = output["pred_logits"]
+        pred_scores = output["pred_logits"].sigmoid()
         pred_masks = output["pred_masks"].sigmoid()
-        pred_objectness = output["pred_scores"]
+        pred_objectness = output["pred_scores"].sigmoid()
+        pred_prob = output["pred_prob"]
+        pred_scores = torch.sqrt(pred_scores * pred_objectness)
         pred_scores[:,:, self.invalid_cls_logits] = -10e10
+        obj_prob = torch.exp(-pred_prob*self.temperature).unsqueeze(-1)
+        pred_scores = obj_prob * pred_scores
 
-        #pred_scores = torch.sqrt(pred_scores * pred_objectness)
-        obj_prob = torch.sigmoid(pred_objectness*self.temperature).unsqueeze(-1)
-        pred_scores = torch.sqrt(obj_prob * torch.sigmoid(pred_scores))
         for _, (scores_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
                 pred_scores, pred_masks, batched_inputs, image_sizes)):
 

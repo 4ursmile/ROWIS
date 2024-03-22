@@ -45,8 +45,8 @@ class InstanceBranch(nn.Module):
         # outputs
         self.cls_score = nn.Linear(dim, self.num_classes)
         self.mask_kernel = nn.Linear(dim, kernel_dim)
-        #self.objectness = nn.Linear(dim, 1)
-        self.objectness = ProbObjectnessHead(dim)
+        self.objectness = nn.Linear(dim, 1)
+        self.prob = ProbObjectnessHead(dim)
         self.prior_prob = 0.01
         self._init_weights()
 
@@ -83,7 +83,8 @@ class InstanceBranch(nn.Module):
         pred_logits = self.cls_score(inst_features)
         pred_kernel = self.mask_kernel(inst_features)
         pred_scores = self.objectness(inst_features)
-        return pred_logits, pred_kernel, pred_scores, iam
+        pred_prob = self.prob(inst_features)
+        return pred_logits, pred_kernel, pred_scores, pred_prob, iam
 
 
 class MaskBranch(nn.Module):
@@ -149,7 +150,7 @@ class BaseIAMDecoder(nn.Module):
     def forward(self, features):
         coord_features = self.compute_coordinates(features)
         features = torch.cat([coord_features, features], dim=1)
-        pred_logits, pred_kernel, pred_scores, iam = self.inst_branch(features)
+        pred_logits, pred_kernel, pred_scores, pred_prob,  iam = self.inst_branch(features)
         mask_features = self.mask_branch(features)
 
         N = pred_kernel.shape[1]
@@ -166,6 +167,7 @@ class BaseIAMDecoder(nn.Module):
             "pred_logits": pred_logits,
             "pred_masks": pred_masks,
             "pred_scores": pred_scores,
+            "pred_prob": pred_prob
         }
 
         if self.output_iam:
@@ -197,8 +199,8 @@ class GroupInstanceBranch(nn.Module):
 
         self.cls_score = nn.Linear(expand_dim, self.num_classes)
         self.mask_kernel = nn.Linear(expand_dim, kernel_dim)
-        #self.objectness = nn.Linear(expand_dim, 1)
-        self.objectness = ProbObjectnessHead(expand_dim)
+        self.objectness = nn.Linear(expand_dim, 1)
+        self.prob = ProbObjectnessHead(expand_dim)
         self.prior_prob = 0.01
         self._init_weights()
 
@@ -242,7 +244,8 @@ class GroupInstanceBranch(nn.Module):
         pred_logits = self.cls_score(inst_features)
         pred_kernel = self.mask_kernel(inst_features)
         pred_scores = self.objectness(inst_features)
-        return pred_logits, pred_kernel, pred_scores, iam
+        pred_prob = self.prob(inst_features)
+        return pred_logits, pred_kernel, pred_scores, pred_prob, iam
 
 
 @SPARSE_INST_DECODER_REGISTRY.register()
@@ -282,7 +285,8 @@ class GroupInstanceSoftBranch(GroupInstanceBranch):
         pred_logits = self.cls_score(inst_features)
         pred_kernel = self.mask_kernel(inst_features)
         pred_scores = self.objectness(inst_features)
-        return pred_logits, pred_kernel, pred_scores, iam
+        pred_prob = self.prob(inst_features)
+        return pred_logits, pred_kernel, pred_scores, pred_prob, iam
 
 
 @SPARSE_INST_DECODER_REGISTRY.register()
