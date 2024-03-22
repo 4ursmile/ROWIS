@@ -44,7 +44,7 @@ def add_sparse_inst_config(cfg):
     # [Loss]
     cfg.MODEL.SPARSE_INST.LOSS = CN()
     cfg.MODEL.SPARSE_INST.LOSS.NAME = "SparseInstCriterion"
-    cfg.MODEL.SPARSE_INST.LOSS.ITEMS = ("labels", "masks", "prob")
+    cfg.MODEL.SPARSE_INST.LOSS.ITEMS = ("labels", "masks", "probs")
     # loss weight
     cfg.MODEL.SPARSE_INST.LOSS.CLASS_WEIGHT = 2.0
     cfg.MODEL.SPARSE_INST.LOSS.MASK_PIXEL_WEIGHT = 5.0

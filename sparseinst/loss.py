@@ -188,6 +188,8 @@ class SparseInstCriterion(nn.Module):
         if loss == "loss_objectness":
             # NOTE: loss_objectness will be calculated in `loss_masks_with_iou_objectness`
             return {}
+        print(loss)
+        print(loss_map)
         assert loss in loss_map
         return loss_map[loss](outputs, targets, indices, num_instances, **kwargs)
 
