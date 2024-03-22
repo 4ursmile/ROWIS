@@ -120,14 +120,7 @@ class SparseInstCriterion(nn.Module):
         idx = self._get_src_permutation_idx(indices)
         pred_obj = outputs['pred_prob'][idx]
         return {"loss_prob": torch.clamp(pred_obj, min = self.min_obj).sum() / num_instances}
-    def calculate_loss_objectness(self, outputs, targets, indices, num_instances, input_shape):
-        assert "pred_scores" in outputs
-        idx = self._get_src_permutation_idx(indices)
-        pred_obj = outputs['pred_scores'][idx]
-        target_obj = torch.cat([t["scores"][J]
-                                for t, (_, J) in zip(targets, indices)])
-        target_obj = target_obj.flatten(0)
-        return F.binary_cross_entropy_with_logits(pred_obj, target_obj, reduction='mean')
+
     def loss_masks_with_iou_objectness(self, outputs, targets, indices, num_instances, input_shape):
         src_idx = self._get_src_permutation_idx(indices)
         tgt_idx = self._get_tgt_permutation_idx(indices)
@@ -183,7 +176,7 @@ class SparseInstCriterion(nn.Module):
         loss_map = {
             "labels": self.loss_labels,
             "masks": self.loss_masks_with_iou_objectness,
-            "probs": self.calculate_loss_objectness,
+            "probs": self.loss_obj_likelihood,
         }
         if loss == "loss_objectness":
             # NOTE: loss_objectness will be calculated in `loss_masks_with_iou_objectness`
