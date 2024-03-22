@@ -11,6 +11,7 @@ from fvcore.nn import sigmoid_focal_loss_jit
 from detectron2.utils.registry import Registry
 
 from .utils import nested_masks_from_list, is_dist_avail_and_initialized, get_world_size
+from .probhead import sigmoid_focal_loss
 
 SPARSE_INST_MATCHER_REGISTRY = Registry("SPARSE_INST_MATCHER")
 SPARSE_INST_MATCHER_REGISTRY.__doc__ = "Matcher for SparseInst"
@@ -59,7 +60,7 @@ class SparseInstCriterion(nn.Module):
         self.losses = cfg.MODEL.SPARSE_INST.LOSS.ITEMS
         self.weight_dict = self.get_weight_dict(cfg)
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
-        self.min_obj = -(cfg.MODEL.SPARSE_INST.DECODER.INST.DIM*cfg.MODEL.SPARSE_INST.DECODER.GROUPS)*math.log(0.9)
+        self.min_obj = -cfg.MODEL.SPARSE_INST.DECODER.INST.DIM*math.log(0.9)
 
     def get_weight_dict(self, cfg):
         losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness", "loss_prob")
@@ -90,7 +91,9 @@ class SparseInstCriterion(nn.Module):
 
     def loss_labels(self, outputs, targets, indices, num_instances, input_shape=None):
         assert "pred_logits" in outputs
-        src_logits = outputs['pred_logits']
+        temp_src_logits = outputs['pred_logits'].clone()
+        temp_src_logits[:,:, self.invalid_cls_logits] = -10e10
+        src_logits = temp_src_logits
         idx = self._get_src_permutation_idx(indices)
         target_classes_o = torch.cat([t["labels"][J]
                                      for t, (_, J) in zip(targets, indices)])
@@ -113,6 +116,11 @@ class SparseInstCriterion(nn.Module):
             gamma=2.0,
             reduction="sum",
         ) / num_instances
+
+        class_loss = sigmoid_focal_loss(
+            src_logits, labels, num_instances, alpha=0.25, gamma=2.0, num_classes=self.num_classes, empty_weight=0.1
+        ) * src_logits.shape[1]
+
         losses = {'loss_ce': class_loss}
         return losses
     def loss_obj_likelihood(self, outputs, targets, indices, num_instances, input_shape):
