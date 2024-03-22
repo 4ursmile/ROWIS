@@ -84,6 +84,10 @@ class InstanceBranch(nn.Module):
         pred_kernel = self.mask_kernel(inst_features)
         pred_scores = self.objectness(inst_features)
         pred_prob = self.prob(inst_features)
+        print(inst_features)
+        print("=====================================================")
+        print(pred_scores)
+        print(pred_prob)
         return pred_logits, pred_kernel, pred_scores, pred_prob, iam
 
 
