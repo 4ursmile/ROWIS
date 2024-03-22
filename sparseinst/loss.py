@@ -109,13 +109,13 @@ class SparseInstCriterion(nn.Module):
         labels = torch.zeros_like(src_logits)
         labels[pos_inds, target_classes[pos_inds]] = 1
         # comp focal loss.
-        class_loss = sigmoid_focal_loss_jit(
-            src_logits,
-            labels,
-            alpha=0.25,
-            gamma=2.0,
-            reduction="sum",
-        ) / num_instances
+        # class_loss = sigmoid_focal_loss_jit(
+        #     src_logits,
+        #     labels,
+        #     alpha=0.25,
+        #     gamma=2.0,
+        #     reduction="sum",
+        # ) / num_instances
 
         class_loss = sigmoid_focal_loss(
             src_logits, labels, num_instances, alpha=0.25, gamma=2.0, num_classes=self.num_classes, empty_weight=0.1

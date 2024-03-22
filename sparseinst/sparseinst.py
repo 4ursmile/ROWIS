@@ -133,9 +133,9 @@ class SparseInst(nn.Module):
         pred_objectness = output["pred_scores"].sigmoid()
         pred_prob = output["pred_prob"]
         pred_scores = torch.sqrt(pred_scores * pred_objectness)
-        pred_scores[:,:, self.invalid_cls_logits] = -10e10
-        obj_prob = torch.exp(-pred_prob*self.temperature).unsqueeze(-1)
-        pred_scores = obj_prob * pred_scores
+        # pred_scores[:,:, self.invalid_cls_logits] = -10e10
+        # obj_prob = torch.exp(-pred_prob*self.temperature).unsqueeze(-1)
+        # pred_scores = obj_prob * pred_scores
         pred_masks = F.interpolate(
             pred_masks, scale_factor=4.0, mode="bilinear", align_corners=False)
         return pred_scores, pred_masks
@@ -149,7 +149,7 @@ class SparseInst(nn.Module):
         pred_prob = output["pred_prob"]
         pred_scores = torch.sqrt(pred_scores * pred_objectness)
         print(pred_scores)
-        assert 1 == 1
+        assert 1 == 0
         # pred_scores[:,:, self.invalid_cls_logits] = -10e10
         # obj_prob = torch.exp(-pred_prob*self.temperature).unsqueeze(-1)
         # print(pred_scores.shape, obj_prob.shape)
