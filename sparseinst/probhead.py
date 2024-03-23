@@ -51,7 +51,6 @@ class ProbObjectnessHead(nn.Module):
 class ProbObjectnessHeadBlock(nn.Module):
     def __init__(self, hidden_dim, activation = None, expansion_factor=2, dropout=0.1):
         super().__init__()
-        self.norm1 = nn.LayerNorm(hidden_dim)
         self.norm2 = nn.LayerNorm(hidden_dim)
         if activation == None:
             activation = nn.ReLU()
@@ -60,14 +59,11 @@ class ProbObjectnessHeadBlock(nn.Module):
                 activation,
                 nn.Linear(hidden_dim*expansion_factor, hidden_dim),
         )
-        self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
         self.prob_head = ProbObjectnessHead(hidden_dim)
     def forward(self, x):
-        out = self.norm1(x)
-        out = self.dropout1(out)
-        ff_out = self.ff(out)
-        ff_out_res = ff_out + out
+        ff_out = self.ff(x)
+        ff_out_res = ff_out + x
         out = self.norm2(ff_out_res)
         out = self.dropout2(out)
         prob = self.prob_head(out)
