@@ -63,8 +63,7 @@ class ProbObjectnessHeadBlock(nn.Module):
         self.prob_head = ProbObjectnessHead(hidden_dim)
     def forward(self, x):
         ff_out = self.ff(x)
-        ff_out_res = ff_out + x
-        out = self.norm2(ff_out_res)
+        out = self.norm2(ff_out)
         out = self.dropout2(out)
         prob = self.prob_head(out)
         return prob
