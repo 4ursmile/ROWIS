@@ -56,12 +56,9 @@ class ProbObjectnessHeadBlock(nn.Module):
         if activation == None:
             activation = nn.ReLU()
         self.ff = nn.Sequential(
-            [
                 nn.Linear(hidden_dim, hidden_dim*expansion_factor),
                 activation,
                 nn.Linear(hidden_dim*expansion_factor, hidden_dim),
-            
-            ]
         )
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
