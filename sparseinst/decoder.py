@@ -11,7 +11,7 @@ from fvcore.nn.weight_init import c2_msra_fill, c2_xavier_fill
 from detectron2.utils.registry import Registry
 from detectron2.layers import Conv2d
 from sparseinst.encoder import SPARSE_INST_ENCODER_REGISTRY
-from .probhead import ProbObjectnessHead
+from .probhead import ProbObjectnessHead, ProbObjectnessHeadBlock, ProbObjectnessHeadBlockStack
 
 SPARSE_INST_DECODER_REGISTRY = Registry("SPARSE_INST_DECODER")
 SPARSE_INST_DECODER_REGISTRY.__doc__ = "registry for SparseInst decoder"
@@ -45,8 +45,7 @@ class InstanceBranch(nn.Module):
         # outputs
         self.cls_score = nn.Linear(dim, self.num_classes)
         self.mask_kernel = nn.Linear(dim, kernel_dim)
-        self.objectness = nn.Linear(dim, 1)
-        self.prob = ProbObjectnessHead(dim)
+        self.objectness = ProbObjectnessHeadBlockStack(dim)
         self.prior_prob = 0.01
         self._init_weights()
 
@@ -83,12 +82,7 @@ class InstanceBranch(nn.Module):
         pred_logits = self.cls_score(inst_features)
         pred_kernel = self.mask_kernel(inst_features)
         pred_scores = self.objectness(inst_features)
-        pred_prob = self.prob(inst_features)
-        print(inst_features)
-        print("=====================================================")
-        print(pred_scores)
-        print(pred_prob)
-        return pred_logits, pred_kernel, pred_scores, pred_prob, iam
+        return pred_logits, pred_kernel, pred_scores, iam
 
 
 class MaskBranch(nn.Module):
@@ -154,7 +148,7 @@ class BaseIAMDecoder(nn.Module):
     def forward(self, features):
         coord_features = self.compute_coordinates(features)
         features = torch.cat([coord_features, features], dim=1)
-        pred_logits, pred_kernel, pred_scores, pred_prob,  iam = self.inst_branch(features)
+        pred_logits, pred_kernel, pred_scores,  iam = self.inst_branch(features)
         mask_features = self.mask_branch(features)
 
         N = pred_kernel.shape[1]
@@ -170,8 +164,7 @@ class BaseIAMDecoder(nn.Module):
         output = {
             "pred_logits": pred_logits,
             "pred_masks": pred_masks,
-            "pred_scores": pred_scores,
-            "pred_prob": pred_prob
+            "pred_scores": pred_scores
         }
 
         if self.output_iam:
@@ -203,8 +196,8 @@ class GroupInstanceBranch(nn.Module):
 
         self.cls_score = nn.Linear(expand_dim, self.num_classes)
         self.mask_kernel = nn.Linear(expand_dim, kernel_dim)
-        self.objectness = nn.Linear(expand_dim, 1)
-        self.prob = ProbObjectnessHead(expand_dim)
+        # self.objectness = nn.Linear(expand_dim, 1)
+        self.objectness = ProbObjectnessHeadBlockStack(expand_dim)
         self.prior_prob = 0.01
         self._init_weights()
 
@@ -248,12 +241,7 @@ class GroupInstanceBranch(nn.Module):
         pred_logits = self.cls_score(inst_features)
         pred_kernel = self.mask_kernel(inst_features)
         pred_scores = self.objectness(inst_features)
-        pred_prob = self.prob(inst_features)
-        print(inst_features)
-        print("=====================================================")
-        print(pred_scores)
-        print(pred_prob)
-        return pred_logits, pred_kernel, pred_scores, pred_prob, iam
+        return pred_logits, pred_kernel, pred_scores, iam
 
 
 @SPARSE_INST_DECODER_REGISTRY.register()
@@ -293,8 +281,7 @@ class GroupInstanceSoftBranch(GroupInstanceBranch):
         pred_logits = self.cls_score(inst_features)
         pred_kernel = self.mask_kernel(inst_features)
         pred_scores = self.objectness(inst_features)
-        pred_prob = self.prob(inst_features)
-        return pred_logits, pred_kernel, pred_scores, pred_prob, iam
+        return pred_logits, pred_kernel, pred_scores, iam
 
 
 @SPARSE_INST_DECODER_REGISTRY.register()

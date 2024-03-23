@@ -40,12 +40,58 @@ class ProbObjectnessHead(nn.Module):
         super().__init__()
         self.flatten = nn.Flatten(0,1)
         self.objectness_bn = nn.BatchNorm1d(hidden_dim, affine=False)
+
     def freeze_prob_model(self):
         self.objectness_bn.eval()
+        
     def forward(self, x):
-        out = self.flatten(x)
-        out = self.objectness_bn(out).unflatten(0, x.shape[:2])
+        out=self.flatten(x)
+        out=self.objectness_bn(out).unflatten(0, x.shape[:2])
         return out.norm(dim=-1)**2
+class ProbObjectnessHeadBlock(nn.Module):
+    def __init__(self, hidden_dim, activation = None, expansion_factor=2, dropout=0.1):
+        self.norm1 = nn.LayerNorm(hidden_dim)
+        self.norm2 = nn.LayerNorm(hidden_dim)
+        if activation == None:
+            activation = nn.ReLU()
+        self.ff = nn.Sequential(
+            [
+                nn.Linear(hidden_dim, hidden_dim*expansion_factor),
+                activation,
+                nn.Linear(hidden_dim*expansion_factor, hidden_dim),
+            
+            ]
+        )
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.prob_head = ProbObjectnessHead(hidden_dim)
+    def forward(self, x):
+        out = self.norm1(x)
+        out = self.dropout1(out)
+        ff_out = self.ff(out)
+        ff_out_res = ff_out + out
+        out = self.norm2(ff_out_res)
+        out = self.dropout2(out)
+        prob = self.prob_head(out)
+        return prob
+class ProbObjectnessHeadBlockStack(nn.Module):
+    def __init__(self, hidden_dim, activation = None, final_activation = None , expansion_factor=2, dropout=0.1, num_blocks=4):
+        super().__init__()
+        self.blocks = _get_clones(ProbObjectnessHeadBlock(hidden_dim, activation, expansion_factor, dropout), num_blocks-1)
+        if final_activation == None:
+            final_activation = nn.Sigmoid()
+        self.pooling = nn.AdaptiveAvgPool2d((1,1))
+        self.final_activation = final_activation
+    def forward(self, x):
+        probs = []
+        for block in self.blocks:
+            x = block(x)
+            probs.append(x)
+        # Apply final activation to the stacked output
+        probs = torch.stack(probs)
+        probs = self.pooling(probs).squeeze(-1).squeeze(-1)
+        probs = self.final_activation(probs)
+        return probs
 class FullProbObjectnessHead(nn.Module):
     def __init__(self, hidden_dim, device='cpu'):
         super().__init__()
