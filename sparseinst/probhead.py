@@ -50,6 +50,7 @@ class ProbObjectnessHead(nn.Module):
         return out.norm(dim=-1)**2
 class ProbObjectnessHeadBlock(nn.Module):
     def __init__(self, hidden_dim, activation = None, expansion_factor=2, dropout=0.1):
+        super().__init__()
         self.norm1 = nn.LayerNorm(hidden_dim)
         self.norm2 = nn.LayerNorm(hidden_dim)
         if activation == None:
