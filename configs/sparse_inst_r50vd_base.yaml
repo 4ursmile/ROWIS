@@ -7,4 +7,6 @@ MODEL:
   SPARSE_INST:
     DECODER:
       NAME: "BaseIAMDecoder"
+  OWIS:
+    HIDDEN_DIM: 256
 OUTPUT_DIR: "output/sparse_inst_r50_base"

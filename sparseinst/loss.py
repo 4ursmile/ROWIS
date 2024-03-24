@@ -61,6 +61,7 @@ class SparseInstCriterion(nn.Module):
         self.weight_dict = self.get_weight_dict(cfg)
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
         self.min_obj = -cfg.MODEL.SPARSE_INST.DECODER.INST.DIM*math.log(0.9)
+        self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
 
     def get_weight_dict(self, cfg):
         losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness")

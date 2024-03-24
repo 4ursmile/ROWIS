@@ -3,6 +3,8 @@ MODEL:
   WEIGHTS: "pretrained_models/R-50.pkl"
   RESNETS:
     DEFORM_ON_PER_STAGE: [False, False, True, True] # dcn on res4, res5
+  OWIS:
+    HIDDEN_DIM: 1024
 INPUT:
   CROP:
     ENABLED: True

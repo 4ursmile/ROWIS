@@ -4,6 +4,8 @@ MODEL:
   BACKBONE:
     FREEZE_AT: 0
     NAME: "build_resnet_vd_backbone"
+  OWIS:
+    HIDDEN_DIM: 1024
 INPUT:
   CROP:
     ENABLED: True

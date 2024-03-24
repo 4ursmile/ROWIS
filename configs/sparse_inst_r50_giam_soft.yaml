@@ -4,4 +4,6 @@ MODEL:
   SPARSE_INST:
     DECODER:
       NAME: "GroupIAMSoftDecoder"
+  OWIS:
+    HIDDEN_DIM: 1024
 OUTPUT_DIR: "output/sparse_inst_r50_giam_soft"

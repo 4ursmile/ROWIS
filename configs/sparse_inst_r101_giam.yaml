@@ -3,4 +3,6 @@ MODEL:
   WEIGHTS: "pretrained_models/R-101.pkl"
   RESNETS:
     DEPTH: 101
+  OWIS:
+    HIDDEN_DIM: 1024
 OUTPUT_DIR: "output/sparse_inst_r101_giam"

@@ -61,7 +61,7 @@ class SparseInst(nn.Module):
         self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
         self.temperature = cfg.MODEL.OWIS.TEMPERATURE
         self.pred_per_image = cfg.MODEL.OWIS.PRED_PER_IMAGE
-        self.temperature = cfg.MODEL.OWIS.TEMPERATURE
+        self.temperature = cfg.MODEL.OWIS.TEMPERATURE/cfg.MODEL.OWIS.HIDDEN_DIM
         print(f"invalid_cls_logits: {self.invalid_cls_logits}")
     def normalizer(self, image):
         image = (image - self.pixel_mean) / self.pixel_std
