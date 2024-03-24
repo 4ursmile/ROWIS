@@ -21,7 +21,6 @@ MODEL:
     CUR_INTRODUCED_CLS: 80
     TEMPERATURE: 1.0
     PRED_PER_IMAGE: 100
-    HIDDEN_DIM: 1024
 DATASETS:
   TRAIN: ("coco_train",)
   TEST:  ("coco_val",)
