@@ -150,7 +150,7 @@ class SparseInst(nn.Module):
         print(f"obj_prob: {obj_prob.shape}")
         print(f"pred_scores: {pred_scores.shape}")
         print("------------------------------------------------------")
-        print(obj_prob.max(), pred_objectness.max())
+        print(obj_prob.min(), obj_prob.max())
         pred_scores = torch.sqrt(pred_scores * obj_prob)
         # pred_scores[:,:, self.invalid_cls_logits] = -10e10
         # obj_prob = torch.exp(-pred_prob*self.temperature).unsqueeze(-1)
