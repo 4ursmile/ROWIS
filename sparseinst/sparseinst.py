@@ -130,9 +130,9 @@ class SparseInst(nn.Module):
 
         pred_scores = output["pred_logits"].sigmoid()
         pred_masks = output["pred_masks"].sigmoid()
-        pred_objectness = output["pred_scores"].sigmoid()
-        pred_prob = output["pred_prob"]
-        pred_scores = torch.sqrt(pred_scores * pred_objectness)
+        pred_objectness = output["pred_scores"]
+        obj_prob = torch.exp(-pred_objectness*self.temperature).unsqueeze(-1)
+        pred_scores = torch.sqrt(pred_scores * obj_prob)
         # pred_scores[:,:, self.invalid_cls_logits] = -10e10
         # obj_prob = torch.exp(-pred_prob*self.temperature).unsqueeze(-1)
         # pred_scores = obj_prob * pred_scores
@@ -146,9 +146,12 @@ class SparseInst(nn.Module):
         pred_scores = output["pred_logits"].sigmoid()
         pred_masks = output["pred_masks"].sigmoid()
         pred_objectness = output["pred_scores"]
-        pred_prob = output["pred_prob"]
-        pred_scores = torch.sqrt(pred_scores * pred_objectness)
-        assert 1 == 0
+        obj_prob = torch.exp(-pred_objectness*self.temperature).unsqueeze(-1)
+        print(f"obj_prob: {obj_prob.shape}")
+        print(f"pred_scores: {pred_scores.shape}")
+        print("------------------------------------------------------")
+        print(obj_prob)
+        pred_scores = torch.sqrt(pred_scores * obj_prob)
         # pred_scores[:,:, self.invalid_cls_logits] = -10e10
         # obj_prob = torch.exp(-pred_prob*self.temperature).unsqueeze(-1)
         # print(pred_scores.shape, obj_prob.shape)
