@@ -34,10 +34,6 @@ class InstanceDeformableConvBlock(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.ReLU()
         )
-        self.conv2 = nn.Sequential(
-            DeformableConv2d(out_channels, out_channels, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(out_channels),
-        )
         self.downsample = nn.Sequential(
             DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
@@ -48,7 +44,6 @@ class InstanceDeformableConvBlock(nn.Module):
     def forward(self, x):
         residual = x
         out = self.conv1(x)
-        out = self.conv2(out)
         residual = self.downsample(x)
         out += residual
         out = self.relu(out)
@@ -63,6 +58,53 @@ class InstanceDeformableConv(nn.Module):
         self.layers = nn.Sequential(*layers)
     def forward(self, x):
         return self.layers(x)
+class DeformableIAMSingle(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
+        super(DeformableIAMSingle, self).__init__()
+        self.conv = nn.Sequential(
+            DeformableConv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU()
+        )
+        self.fpn = nn.Sequential(
+            nn.Linear(out_channels, out_channels),
+            nn.ReLU()
+        )
+        self.dropout = nn.Dropout(0.1)
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.fpn(out)
+        out = self.dropout(out)
+        return out
+class DeformableIAMDouble(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
+        super(DeformableIAMDouble, self).__init__()
+        self.conv = nn.Sequential(
+            DeformableConv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU()
+        )
+        self.downsample = nn.Sequential(
+            DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
+            nn.BatchNorm2d(out_channels),
+        )
+    def forward(self, x, residual):
+        out = self.conv(x)
+        residual = self.downsample(x)
+        out += residual
+        return out
+class DeformableIAM(nn.Module):
+    def __init__(self, num_blocks, in_channels, out_channels, kernel_size=3, stride = 1):
+        super(DeformableIAM, self).__init__()
+        self.start_layer = DeformableIAMSingle(in_channels, out_channels, kernel_size, stride)
+        middle_layers = []
+        for _ in range(1, num_blocks):
+            middle_layers.append(DeformableIAMDouble(out_channels, out_channels, kernel_size, stride))
+        self.middle_layers = middle_layers
+        self.end_layer = DeformableIAMSingle(out_channels, out_channels, kernel_size, stride)
+    def forward(self, x):
+        out = self.start_layer(x)
+        
 class InstanceBranch(nn.Module):
 
     def __init__(self, cfg, in_channels):
