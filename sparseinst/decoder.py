@@ -39,7 +39,7 @@ class InstanceDeformableConvBlock(nn.Module):
             nn.BatchNorm2d(out_channels),
         )
         self.downsample = nn.Sequential(
-            DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride),
+            DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
         )
         self.relu = nn.ReLU()
