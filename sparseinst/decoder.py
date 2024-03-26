@@ -320,8 +320,6 @@ class GroupInstanceBranch(nn.Module):
     def _init_weights(self):
         self.inst_convs.init_weights()
         bias_value = -math.log((1 - self.prior_prob) / self.prior_prob)
-        for module in [self.iam_conv.start_layer, self.cls_score[0]]:
-            init.constant_(module.bias, bias_value)
         self.iam_conv.init_weights(bias_value)
         for cls_score in self.cls_score:
             init.normal_(cls_score.weight, std=0.01)
