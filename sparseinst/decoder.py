@@ -304,7 +304,7 @@ class GroupInstanceBranch(nn.Module):
         # outputs
         dropout = cfg.MODEL.SPARSE_INST.DECODER.INST.DROPOUT
         self.fc = nn.Sequential(
-            nn.Linear(dim, dim),
+            nn.Linear(expand_dim, dim),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(dim, dim),
@@ -339,10 +339,11 @@ class GroupInstanceBranch(nn.Module):
                     c2_xavier_fill(module)
 
     def iam_map_to_features(self, iam, features):
-        B, N = iam.shape[:2]
+        iam_prob = iam.sigmoid()
+        B, N = iam_prob.shape[:2]
         C = features.size(1)
         # BxNxHxW -> BxNx(HW)
-        iam_prob = F.softmax(iam.view(B, N, -1), dim=-1)
+        iam_prob = iam_prob.view(B, N, -1)
         # aggregate features: BxCxHxW -> Bx(HW)xC
         inst_features = torch.bmm(
             iam_prob, features.view(B, C, -1).permute(0, 2, 1))
