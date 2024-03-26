@@ -97,7 +97,7 @@ class DeformableIAMDouble(nn.Module):
                 init.normal_(m.weight, std=0.01)
         for m in self.downsample.modules():
             if isinstance(m, nn.Conv2d):
-                init.constant_(m.bias, value)
+                c2_msra_fill(m)
     def forward(self, x, residual):
         out = self.conv(x)
         residual = self.downsample(x)
