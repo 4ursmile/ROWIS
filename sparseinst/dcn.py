@@ -2,7 +2,6 @@ import torch
 import torchvision.ops
 from torch import nn
 from fvcore.nn.weight_init import c2_msra_fill, c2_xavier_fill
-
 class DeformableConv2d(nn.Module):
     def __init__(self,
                  in_channels,
@@ -50,10 +49,11 @@ class DeformableConv2d(nn.Module):
                                       padding=self.padding,
                                       dilation=self.dilation,
                                       bias=bias)
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     def init_weights(self):
         nn.init.kaiming_normal_(self.regular_conv.weight, mode='fan_out', nonlinearity='relu')
         if self.regular_conv.bias is not None:
-            nn.init.constant_(self.regular_conv.bias, 0)
+            nn.init.constant_(self.regular_conv.bias, 0).to(self.device)
         c2_msra_fill(self.offset_conv)
         c2_msra_fill(self.modulator_conv)
     def forward(self, x):

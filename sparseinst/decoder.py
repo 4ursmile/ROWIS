@@ -70,11 +70,12 @@ class DeformableIAMSingle(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.ReLU()
         )
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     def init_weights(self, value):
         for m in self.conv.modules():
             if isinstance(m, nn.Conv2d):
-                init.constant_(m.bias, value)
-                init.normal_(m.weight, std=0.01)
+                init.constant_(m.bias, value).to(self.device)
+                init.normal_(m.weight, std=0.01).to(self.device)
     def forward(self, x):
         out = self.conv(x)
         return out
@@ -90,11 +91,12 @@ class DeformableIAMDouble(nn.Module):
             DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
         )
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     def init_weights(self, value):
         for m in self.conv.modules():
             if isinstance(m, nn.Conv2d):
-                init.constant_(m.bias, value)
-                init.normal_(m.weight, std=0.01)
+                init.constant_(m.bias, value).to(self.device)
+                init.normal_(m.weight, std=0.01).to(self.device)
         for m in self.downsample.modules():
             if isinstance(m, nn.Conv2d):
                 c2_msra_fill(m)
