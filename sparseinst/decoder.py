@@ -56,17 +56,25 @@ class InstanceDeformableConv(nn.Module):
         for _ in range(1, num_blocks):
             layers.append(InstanceDeformableConvBlock(out_channels, out_channels, kernel_size, stride))
         self.layers = nn.Sequential(*layers)
+    def init_weights(self):
+        for m in self.modules():
+            if isinstance(m, DeformableConv2d):
+                m.init_weights()
     def forward(self, x):
         return self.layers(x)
 class DeformableIAMSingle(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
         super(DeformableIAMSingle, self).__init__()
         self.conv = nn.Sequential(
-            DeformableConv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
             nn.BatchNorm2d(out_channels),
             nn.ReLU()
         )
-
+    def init_weights(self, value):
+        for m in self.conv.modules():
+            if isinstance(m, nn.Conv2d):
+                init.constant_(m.bias, value)
+                init.normal_(m.weight, std=0.01)
     def forward(self, x):
         out = self.conv(x)
         return out
@@ -74,14 +82,22 @@ class DeformableIAMDouble(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
         super(DeformableIAMDouble, self).__init__()
         self.conv = nn.Sequential(
-            DeformableConv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
             nn.BatchNorm2d(out_channels),
             nn.ReLU()
         )
         self.downsample = nn.Sequential(
             DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
-            nn.BatchNorm2d(out_channels),
+            nn.Conv2d(out_channels),
         )
+    def init_weights(self, value):
+        for m in self.conv.modules():
+            if isinstance(m, nn.Conv2d):
+                init.constant_(m.bias, value)
+                init.normal_(m.weight, std=0.01)
+        for m in self.downsample.modules():
+            if isinstance(m, nn.Conv2d):
+                init.constant_(m.bias, value)
     def forward(self, x, residual):
         out = self.conv(x)
         residual = self.downsample(x)
@@ -98,6 +114,11 @@ class DeformableIAM(nn.Module):
         self.middle_layers = middle_layers
         self.end_layer = DeformableIAMSingle(out_channels, out_channels, kernel_size, stride)
         self.result_imtermidiate = result_imtermidiate
+    def init_weights(self, value):
+        self.start_layer.init_weights(value)
+        for layer in self.middle_layers:
+            layer.init_weights(value)
+        self.end_layer.init_weights(value)
     def forward(self, x):
         hs = []
         out= self.start_layer(x)
@@ -297,18 +318,14 @@ class GroupInstanceBranch(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        for m in self.inst_convs.modules():
-            if isinstance(m, nn.Conv2d):
-                c2_msra_fill(m)
+        self.inst_convs.init_weights()
         bias_value = -math.log((1 - self.prior_prob) / self.prior_prob)
         for module in [self.iam_conv.start_layer, self.cls_score[0]]:
             init.constant_(module.bias, bias_value)
- 
-        for iam_conv, cls_score in zip(self.iam_conv.middle_layers, self.cls_score[1:-1]):
-            for module in [iam_conv, cls_score]:
-                init.constant_(module.bias, bias_value)
-            for iam in iam_conv:
-                init.normal_(iam.weight, std=0.01)
+        self.iam_conv.init_weights(bias_value)
+        for cls_score in self.cls_score:
+            init.normal_(cls_score.weight, std=0.01)
+            init.constant_(cls_score.bias, bias_value)
         for module in [self.iam_conv.end_layer, self.cls_score[-1]]:
             init.constant_(module.bias, bias_value)
         for cls_score in self.cls_score:
