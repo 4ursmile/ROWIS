@@ -27,7 +27,7 @@ def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
     return nn.Sequential(*convs)
 
 class InstanceDeformableConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1, downsample=None):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
         super(InstanceDeformableConvBlock, self).__init__()
         self.conv1 = nn.Sequential(
             DeformableConv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
@@ -38,7 +38,10 @@ class InstanceDeformableConvBlock(nn.Module):
             DeformableConv2d(out_channels, out_channels, kernel_size=kernel_size, stride=stride),
             nn.BatchNorm2d(out_channels),
         )
-        self.downsample = downsample
+        self.downsample = nn.Sequential(
+            DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride),
+            nn.BatchNorm2d(out_channels),
+        )
         self.relu = nn.ReLU()
         self.out_channels = out_channels
 
@@ -46,20 +49,15 @@ class InstanceDeformableConvBlock(nn.Module):
         residual = x
         out = self.conv1(x)
         out = self.conv2(out)
-        if self.downsample:
-            residual = self.downsample(x)
+        residual = self.downsample(x)
         out += residual
         out = self.relu(out)
         return out
 class InstanceDeformableConv(nn.Module):
     def __init__(self, num_blocks, in_channels, out_channels, kernel_size=3, stride = 1):
         super(InstanceDeformableConv, self).__init__()
-        downsample = nn.Sequential(
-            DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride),
-            nn.BatchNorm2d(out_channels),
-        )
         layers = []
-        layers.append(InstanceDeformableConvBlock(in_channels, out_channels, kernel_size, stride, downsample))
+        layers.append(InstanceDeformableConvBlock(in_channels, out_channels, kernel_size, stride))
         for _ in range(1, num_blocks):
             layers.append(InstanceDeformableConvBlock(out_channels, out_channels, kernel_size, stride))
         self.layers = nn.Sequential(*layers)
