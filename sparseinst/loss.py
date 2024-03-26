@@ -174,8 +174,7 @@ class SparseInstCriterion(nn.Module):
         src_iou_scores = src_iou_scores.flatten(0)
 
         losses = {
-           # "loss_objectness": F.binary_cross_entropy_with_logits(src_iou_scores, tgt_iou_scores, reduction='mean'),
-            "loss_objectness": self.loss_obj_likelihood(outputs, targets, indices, num_instances, input_shape),
+            "loss_objectness": F.binary_cross_entropy_with_logits(src_iou_scores, tgt_iou_scores, reduction='mean'),
             "loss_dice": dice_loss(src_masks, target_masks) / num_instances,
             "loss_mask": F.binary_cross_entropy_with_logits(src_masks, target_masks, reduction='mean')
         }

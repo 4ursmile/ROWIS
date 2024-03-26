@@ -12,7 +12,7 @@ from detectron2.utils.registry import Registry
 from detectron2.layers import Conv2d
 from sparseinst.encoder import SPARSE_INST_ENCODER_REGISTRY
 from .probhead import ProbObjectnessHead, ProbObjectnessHeadBlock, ProbObjectnessHeadBlockStack
-
+from .dcn import DeformableConv2d
 SPARSE_INST_DECODER_REGISTRY = Registry("SPARSE_INST_DECODER")
 SPARSE_INST_DECODER_REGISTRY.__doc__ = "registry for SparseInst decoder"
 
@@ -26,7 +26,45 @@ def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
         in_channels = out_channels
     return nn.Sequential(*convs)
 
+class InstanceDeformableConvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1, downsample=None):
+        super(InstanceDeformableConvBlock, self).__init__()
+        self.conv1 = nn.Sequential(
+            DeformableConv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU()
+        )
+        self.conv2 = nn.Sequential(
+            DeformableConv2d(out_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(out_channels),
+        )
+        self.downsample = downsample
+        self.relu = nn.ReLU()
+        self.out_channels = out_channels
 
+    def forward(self, x):
+        residual = x
+        out = self.conv1(x)
+        out = self.conv2(out)
+        if self.downsample:
+            residual = self.downsample(x)
+        out += residual
+        out = self.relu(out)
+        return out
+class InstanceDeformableConv(nn.Module):
+    def __init__(self, num_blocks, in_channels, out_channels, kernel_size=3, stride = 1):
+        super(InstanceDeformableConv, self).__init__()
+        downsample = nn.Sequential(
+            DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride),
+            nn.BatchNorm2d(out_channels),
+        )
+        layers = []
+        layers.append(InstanceDeformableConvBlock(in_channels, out_channels, kernel_size, stride, downsample))
+        for _ in range(1, num_blocks):
+            layers.append(InstanceDeformableConvBlock(out_channels, out_channels, kernel_size, stride))
+        self.layers = nn.Sequential(*layers)
+    def forward(self, x):
+        return self.layers(x)
 class InstanceBranch(nn.Module):
 
     def __init__(self, cfg, in_channels):
@@ -38,14 +76,14 @@ class InstanceBranch(nn.Module):
         kernel_dim = cfg.MODEL.SPARSE_INST.DECODER.KERNEL_DIM
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
 
-        self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim)
+        self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
         # iam prediction, a simple conv
         self.iam_conv = nn.Conv2d(dim, num_masks, 3, padding=1)
 
         # outputs
         self.cls_score = nn.Linear(dim, self.num_classes)
         self.mask_kernel = nn.Linear(dim, kernel_dim)
-        self.objectness = ProbObjectnessHead(dim)
+        self.objectness = nn.Linear(dim, 1)
         self.prior_prob = 0.01
         self._init_weights()
 
@@ -186,7 +224,7 @@ class GroupInstanceBranch(nn.Module):
         self.num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
 
-        self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim)
+        self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
         # iam prediction, a group conv
         expand_dim = dim * self.num_groups
         self.iam_conv = nn.Conv2d(
@@ -196,8 +234,7 @@ class GroupInstanceBranch(nn.Module):
 
         self.cls_score = nn.Linear(expand_dim, self.num_classes)
         self.mask_kernel = nn.Linear(expand_dim, kernel_dim)
-        # self.objectness = nn.Linear(expand_dim, 1)
-        self.objectness = ProbObjectnessHead(expand_dim)
+        self.objectness = nn.Linear(expand_dim, 1)
         self.prior_prob = 0.01
         self._init_weights()
 
