@@ -35,7 +35,8 @@ def add_sparse_inst_config(cfg):
     # decoder.inst_branch
     cfg.MODEL.SPARSE_INST.DECODER.INST = CN()
     cfg.MODEL.SPARSE_INST.DECODER.INST.DIM = 256
-    cfg.MODEL.SPARSE_INST.DECODER.INST.CONVS = 4
+    cfg.MODEL.SPARSE_INST.DECODER.INST.CONVS = 3
+    cfg.MODEL.SPARSE_INST.DECODER.INST.DROPOUT = 0.2
     # decoder.mask_branch
     cfg.MODEL.SPARSE_INST.DECODER.MASK = CN()
     cfg.MODEL.SPARSE_INST.DECODER.MASK.DIM = 256

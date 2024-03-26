@@ -66,15 +66,9 @@ class DeformableIAMSingle(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.ReLU()
         )
-        self.fpn = nn.Sequential(
-            nn.Linear(out_channels, out_channels),
-            nn.ReLU()
-        )
-        self.dropout = nn.Dropout(0.1)
+
     def forward(self, x):
         out = self.conv(x)
-        out = self.fpn(out)
-        out = self.dropout(out)
         return out
 class DeformableIAMDouble(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
@@ -92,9 +86,10 @@ class DeformableIAMDouble(nn.Module):
         out = self.conv(x)
         residual = self.downsample(x)
         out += residual
+        out = F.relu(out)
         return out
 class DeformableIAM(nn.Module):
-    def __init__(self, num_blocks, in_channels, out_channels, kernel_size=3, stride = 1):
+    def __init__(self, num_blocks, in_channels, out_channels, kernel_size=3, stride = 1, result_imtermidiate = False):
         super(DeformableIAM, self).__init__()
         self.start_layer = DeformableIAMSingle(in_channels, out_channels, kernel_size, stride)
         middle_layers = []
@@ -102,8 +97,17 @@ class DeformableIAM(nn.Module):
             middle_layers.append(DeformableIAMDouble(out_channels, out_channels, kernel_size, stride))
         self.middle_layers = middle_layers
         self.end_layer = DeformableIAMSingle(out_channels, out_channels, kernel_size, stride)
+        self.result_imtermidiate = result_imtermidiate
     def forward(self, x):
-        out = self.start_layer(x)
+        hs = []
+        out= self.start_layer(x)
+        hs.append(out)
+        for layer in self.middle_layers:
+            out= layer(out, x)
+            hs.append(out)
+        out= self.end_layer(out)
+        hs.append(out)
+        return torch.stack(hs)
         
 class InstanceBranch(nn.Module):
 
@@ -267,14 +271,28 @@ class GroupInstanceBranch(nn.Module):
         self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
         # iam prediction, a group conv
         expand_dim = dim * self.num_groups
-        self.iam_conv = nn.Conv2d(
-            dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
-        # outputs
-        self.fc = nn.Linear(expand_dim, expand_dim)
 
-        self.cls_score = nn.Linear(expand_dim, self.num_classes)
-        self.mask_kernel = nn.Linear(expand_dim, kernel_dim)
-        self.objectness = nn.Linear(expand_dim, 1)
+        self.iam_conv = DeformableIAM(self.num_groups, dim, self.num_masks)
+        # self.iam_conv = nn.Conv2d(
+        #     dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
+        # outputs
+        dropout = cfg.MODEL.SPARSE_INST.DECODER.INST.DROPOUT
+        self.fc = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(dim, dim),
+            nn.ReLU()
+        )
+
+        self.cls_score = nn.Linear(dim, self.num_classes)
+        self.mask_kernel = nn.Linear(dim, kernel_dim)
+        self.objectness = nn.Linear(dim, 1)
+
+        self.fc = nn.ModuleList([self.fc for _ in range(self.num_groups+2)])
+        self.cls_score = nn.ModuleList([self.cls_score for _ in range(self.num_groups+2)])
+        self.mask_kernel = nn.ModuleList([self.mask_kernel for _ in range(self.num_groups+2)])
+        self.objectness = nn.ModuleList([self.objectness for _ in range(self.num_groups+2)])
         self.prior_prob = 0.01
         self._init_weights()
 
@@ -292,33 +310,65 @@ class GroupInstanceBranch(nn.Module):
         init.constant_(self.mask_kernel.bias, 0.0)
         c2_xavier_fill(self.fc)
 
-    def forward(self, features):
-        # instance features (x4 convs)
-        features = self.inst_convs(features)
-        # predict instance activation maps
-        iam = self.iam_conv(features)
-        iam_prob = iam.sigmoid()
-
-        B, N = iam_prob.shape[:2]
+    def iam_map_to_features(self, iam, features):
+        B, N = iam.shape[:2]
         C = features.size(1)
         # BxNxHxW -> BxNx(HW)
-        iam_prob = iam_prob.view(B, N, -1)
-        normalizer = iam_prob.sum(-1).clamp(min=1e-6)
-        iam_prob = iam_prob / normalizer[:, :, None]
-
+        iam_prob = F.softmax(iam.view(B, N, -1), dim=-1)
         # aggregate features: BxCxHxW -> Bx(HW)xC
         inst_features = torch.bmm(
             iam_prob, features.view(B, C, -1).permute(0, 2, 1))
 
         inst_features = inst_features.reshape(
-            B, 4, N // self.num_groups, -1).transpose(1, 2).reshape(B, N // self.num_groups, -1)
+            B, self.num_groups, N // self.num_groups, -1).transpose(1, 2).reshape(B, N // self.num_groups, -1)
+        return inst_features
+    def forward(self, features):
+        features = self.inst_convs(features)
+        output_logits = []
+        output_masks = []
+        output_scores = []
+        iams = self.iam_conv(features)
+        for i, iam in enumerate(iams):
+            inst_features = self.iam_map_to_features(iam, features)
+            inst_features = self.fc[i](inst_features)
+            pred_logits = self.cls_score[i](inst_features)
+            pred_kernel = self.mask_kernel[i](inst_features)
+            pred_scores = self.objectness[i](inst_features)
+            output_logits.append(pred_logits)
+            output_masks.append(pred_kernel)
+            output_scores.append(pred_scores)
+        output_logits = torch.stack(output_logits)
+        output_masks = torch.stack(output_masks)
+        output_scores = torch.stack(output_scores)
+        return output_logits[-1], output_masks[-1], output_scores[-1], iams[-1]
 
-        inst_features = F.relu_(self.fc(inst_features))
-        # predict classification & segmentation kernel & objectness
-        pred_logits = self.cls_score(inst_features)
-        pred_kernel = self.mask_kernel(inst_features)
-        pred_scores = self.objectness(inst_features)
-        return pred_logits, pred_kernel, pred_scores, iam
+    # def forward(self, features):
+    #     # instance features (x4 convs)
+    #     features = self.inst_convs(features)
+    #     # predict instance activation maps
+    #     iam = self.iam_conv(features)
+    #     iam_prob = iam.sigmoid()
+
+    #     B, N = iam_prob.shape[:2]
+    #     C = features.size(1)
+    #     # BxNxHxW -> BxNx(HW)
+    #     iam_prob = iam_prob.view(B, N, -1)
+    #     normalizer = iam_prob.sum(-1).clamp(min=1e-6)
+    #     iam_prob = iam_prob / normalizer[:, :, None]
+
+    #     # aggregate features: BxCxHxW -> Bx(HW)xC
+    #     inst_features = torch.bmm(
+    #         iam_prob, features.view(B, C, -1).permute(0, 2, 1))
+
+    #     inst_features = inst_features.reshape(
+    #         B, 4, N // self.num_groups, -1).transpose(1, 2).reshape(B, N // self.num_groups, -1)
+
+    #     inst_features = F.relu_(self.fc(inst_features))
+    #     # predict classification & segmentation kernel & objectness
+    #     pred_logits = self.cls_score(inst_features)
+    #     pred_kernel = self.mask_kernel(inst_features)
+    #     pred_scores = self.objectness(inst_features)
+    #     return pred_logits, pred_kernel, pred_scores, iam
 
 
 @SPARSE_INST_DECODER_REGISTRY.register()
