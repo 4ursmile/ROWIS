@@ -327,6 +327,7 @@ class GroupInstanceBranch(nn.Module):
         self.objectness = _get_clones(self.objectness, self.num_groups+2)
         self.prior_prob = 0.01
         self._init_weights()
+        torch.autograd.set_detect_anomaly(True).
 
     def _init_weights(self):
         self.inst_convs.init_weights()
