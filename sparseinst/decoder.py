@@ -67,7 +67,7 @@ class DeformableIAMSingle(nn.Module):
         super(DeformableIAMSingle, self).__init__()
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU()
         ).to(device=self.device)
@@ -84,7 +84,7 @@ class DeformableIAMDouble(nn.Module):
         super(DeformableIAMDouble, self).__init__()
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU()
         ).to(device=self.device)
@@ -99,8 +99,8 @@ class DeformableIAMDouble(nn.Module):
                 init.constant_(m.bias, value)
                 init.normal_(m.weight, std=0.01)
         for m in self.downsample.modules():
-            if isinstance(m, nn.Conv2d):
-                c2_msra_fill(m)
+            if isinstance(m, DeformableConv2d):
+                m.init_weights()
         self.downsample.to(self.device)
         self.conv.to(self.device)
     def forward(self, x, residual):
