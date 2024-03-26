@@ -40,6 +40,10 @@ class InstanceDeformableConvBlock(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.ReLU(True)
         )
+        self.conv2 = nn.Sequential(
+            DeformableConv2d(out_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.BatchNorm2d(out_channels)
+        )
         self.downsample = nn.Sequential(
             DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
@@ -50,6 +54,7 @@ class InstanceDeformableConvBlock(nn.Module):
     def forward(self, x):
         residual = x
         out = self.conv1(x)
+        out = self.conv2(out)
         residual = self.downsample(x)
         out += residual
         out = self.relu(out)
@@ -76,7 +81,7 @@ class DeformableIAMSingle(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(True)
-        ).to(device=self.device)
+        )
     def init_weights(self, value):
         for m in self.conv.modules():
             if isinstance(m, nn.Conv2d):
@@ -93,7 +98,11 @@ class DeformableIAMDouble(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(True)
-        ).to(device=self.device)
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
+            nn.BatchNorm2d(out_channels),
+        )
         self.downsample = nn.Sequential(
             DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
@@ -111,7 +120,8 @@ class DeformableIAMDouble(nn.Module):
         self.conv.to(self.device)
     def forward(self, x, residual):
         residual = x 
-        out = self.conv(x).clone()
+        out = self.conv(x)
+        out = self.conv2(out)
         residual = self.downsample(residual)
         out += residual
         out = self.relu(out)
