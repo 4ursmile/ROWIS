@@ -324,10 +324,7 @@ class GroupInstanceBranch(nn.Module):
         for cls_score in self.cls_score:
             init.normal_(cls_score.weight, std=0.01)
             init.constant_(cls_score.bias, bias_value)
-        for module in [self.iam_conv.end_layer, self.cls_score[-1]]:
-            init.constant_(module.bias, bias_value)
-        for cls_score in self.cls_score:
-            init.normal_(cls_score.weight, std=0.01)
+
         for mask_kernel in self.mask_kernel:
             init.normal_(mask_kernel.weight, std=0.01)
             init.constant_(mask_kernel.bias, 0.0)
