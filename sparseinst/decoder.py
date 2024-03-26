@@ -13,6 +13,12 @@ from detectron2.layers import Conv2d
 from sparseinst.encoder import SPARSE_INST_ENCODER_REGISTRY
 from .probhead import ProbObjectnessHead, ProbObjectnessHeadBlock, ProbObjectnessHeadBlockStack
 from .dcn import DeformableConv2d
+import copy
+
+
+def _get_clones(module, N):
+    return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
+
 SPARSE_INST_DECODER_REGISTRY = Registry("SPARSE_INST_DECODER")
 SPARSE_INST_DECODER_REGISTRY.__doc__ = "registry for SparseInst decoder"
 
@@ -315,10 +321,10 @@ class GroupInstanceBranch(nn.Module):
         self.mask_kernel = nn.Linear(dim, kernel_dim)
         self.objectness = nn.Linear(dim, 1)
 
-        self.fc = nn.ModuleList([self.fc for _ in range(self.num_groups+2)])
-        self.cls_score = nn.ModuleList([self.cls_score for _ in range(self.num_groups+2)])
-        self.mask_kernel = nn.ModuleList([self.mask_kernel for _ in range(self.num_groups+2)])
-        self.objectness = nn.ModuleList([self.objectness for _ in range(self.num_groups+2)])
+        self.fc = _get_clones(self.fc, self.num_groups+2)
+        self.cls_score = _get_clones(self.cls_score, self.num_groups+2)
+        self.mask_kernel = _get_clones(self.mask_kernel, self.num_groups+2)
+        self.objectness = _get_clones(self.objectness, self.num_groups+2)
         self.prior_prob = 0.01
         self._init_weights()
 
