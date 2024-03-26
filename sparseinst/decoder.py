@@ -35,20 +35,21 @@ def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
 class InstanceDeformableConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
         super(InstanceDeformableConvBlock, self).__init__()
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.conv1 = nn.Sequential(
             DeformableConv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(True)
-        )
+        ).to(device=self.device)
         self.conv2 = nn.Sequential(
             DeformableConv2d(out_channels, out_channels, kernel_size=kernel_size, stride=stride),
             nn.BatchNorm2d(out_channels)
-        )
+        ).to(device=self.device)
         self.downsample = nn.Sequential(
             DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
-        )
-        self.relu = nn.ReLU(True)
+        ).to(device=self.device)
+        self.relu = nn.ReLU()
         self.out_channels = out_channels
 
     def forward(self, x):
@@ -66,7 +67,7 @@ class InstanceDeformableConv(nn.Module):
         layers.append(InstanceDeformableConvBlock(in_channels, out_channels, kernel_size, stride))
         for _ in range(1, num_blocks):
             layers.append(InstanceDeformableConvBlock(out_channels, out_channels, kernel_size, stride))
-        self.layers = nn.Sequential(*layers)
+        self.layers = nn.Sequential(*layers).to('cuda' if torch.cuda.is_available() else 'cpu')
     def init_weights(self):
         for m in self.modules():
             if isinstance(m, DeformableConv2d):
@@ -81,7 +82,7 @@ class DeformableIAMSingle(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(True)
-        )
+        ).to(device=self.device)
     def init_weights(self, value):
         for m in self.conv.modules():
             if isinstance(m, nn.Conv2d):
@@ -98,11 +99,11 @@ class DeformableIAMDouble(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(True)
-        )
+        ).to(device=self.device)
         self.conv2 = nn.Sequential(
             nn.Conv2d(out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
             nn.BatchNorm2d(out_channels),
-        )
+        ).to(device=self.device)
         self.downsample = nn.Sequential(
             DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
