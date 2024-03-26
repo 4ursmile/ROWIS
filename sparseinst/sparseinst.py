@@ -130,10 +130,10 @@ class SparseInst(nn.Module):
 
         pred_scores = output["pred_logits"].sigmoid()
         pred_masks = output["pred_masks"].sigmoid()
-        pred_objectness = output["pred_scores"]
-        obj_prob = torch.exp(-pred_objectness*self.temperature).unsqueeze(-1)
-        pred_scores = torch.sqrt(pred_scores * obj_prob)
-        # pred_scores[:,:, self.invalid_cls_logits] = -10e10
+        pred_objectness = output["pred_scores"].sigmoid()
+        pred_scores[:,:, self.invalid_cls_logits] = -10e10
+        
+        pred_scores = torch.sqrt(pred_scores * pred_objectness)
         # obj_prob = torch.exp(-pred_prob*self.temperature).unsqueeze(-1)
         # pred_scores = obj_prob * pred_scores
         pred_masks = F.interpolate(
@@ -145,10 +145,11 @@ class SparseInst(nn.Module):
         results = []
         pred_scores = output["pred_logits"].sigmoid()
         pred_masks = output["pred_masks"].sigmoid()
-        pred_objectness = output["pred_scores"]
-        obj_prob = torch.exp(-pred_objectness*self.temperature).unsqueeze(-1)
-        pred_scores = torch.sqrt(pred_scores * obj_prob)
-        # pred_scores[:,:, self.invalid_cls_logits] = -10e10
+        pred_objectness = output["pred_scores"].sigmoid()
+
+        pred_scores[:,:, self.invalid_cls_logits] = -10e10
+
+        pred_scores = torch.sqrt(pred_scores * pred_objectness)
         # obj_prob = torch.exp(-pred_prob*self.temperature).unsqueeze(-1)
         # print(pred_scores.shape, obj_prob.shape)
         for _, (scores_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
