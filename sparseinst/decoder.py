@@ -92,6 +92,7 @@ class DeformableIAMDouble(nn.Module):
             DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
         ).to(device=self.device)
+        self.relu = nn.ReLU()
     def init_weights(self, value):
         for m in self.conv.modules():
             if isinstance(m, nn.Conv2d):
@@ -106,7 +107,7 @@ class DeformableIAMDouble(nn.Module):
         out = self.conv(x)
         residual = self.downsample(x)
         out += residual
-        out = F.relu(out)
+        out = self.relu(out)
         return out
 class DeformableIAM(nn.Module):
     def __init__(self, num_blocks, in_channels, out_channels, kernel_size=3, stride = 1, result_imtermidiate = False):
