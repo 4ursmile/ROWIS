@@ -65,12 +65,12 @@ class InstanceDeformableConv(nn.Module):
 class DeformableIAMSingle(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
         super(DeformableIAMSingle, self).__init__()
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
             nn.BatchNorm2d(out_channels),
             nn.ReLU()
-        )
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        ).to(device=self.device)
     def init_weights(self, value):
         for m in self.conv.modules():
             if isinstance(m, nn.Conv2d):
@@ -82,16 +82,16 @@ class DeformableIAMSingle(nn.Module):
 class DeformableIAMDouble(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
         super(DeformableIAMDouble, self).__init__()
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
             nn.BatchNorm2d(out_channels),
             nn.ReLU()
-        )
+        ).to(device=self.device)
         self.downsample = nn.Sequential(
             DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
-        )
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        ).to(device=self.device)
     def init_weights(self, value):
         for m in self.conv.modules():
             if isinstance(m, nn.Conv2d):
