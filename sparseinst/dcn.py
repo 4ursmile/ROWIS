@@ -52,7 +52,8 @@ class DeformableConv2d(nn.Module):
                                       bias=bias)
     def init_weights(self):
         nn.init.kaiming_normal_(self.regular_conv.weight, mode='fan_out', nonlinearity='relu')
-        nn.init.constant_(self.regular_conv.bias, 0)
+        if self.regular_conv.bias is not None:
+            nn.init.constant_(self.regular_conv.bias, 0)
         c2_msra_fill(self.offset_conv)
         c2_msra_fill(self.modulator_conv)
     def forward(self, x):
