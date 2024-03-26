@@ -316,7 +316,7 @@ class GroupInstanceBranch(nn.Module):
         # iam prediction, a group conv
         expand_dim = dim * self.num_groups
 
-        self.iam_conv = nn.parallel.DistributedDataParallel(DeformableIAM(self.num_groups, dim, num_masks), find_unused_parameters=True)
+        self.iam_conv = nn.parallel.DistributedDataParallel(module=DeformableIAM(self.num_groups, dim, num_masks), find_unused_parameters=True)
         # self.iam_conv = nn.Conv2d(
         #     dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
         # outputs
@@ -339,8 +339,6 @@ class GroupInstanceBranch(nn.Module):
         self.objectness = _get_clones(self.objectness, self.num_groups+2)
         self.prior_prob = 0.01
         self._init_weights()
-        torch.autograd.set_detect_anomaly(True)
-
     def _init_weights(self):
         self.inst_convs.init_weights()
         bias_value = -math.log((1 - self.prior_prob) / self.prior_prob)
