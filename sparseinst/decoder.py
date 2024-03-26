@@ -301,14 +301,25 @@ class GroupInstanceBranch(nn.Module):
             if isinstance(m, nn.Conv2d):
                 c2_msra_fill(m)
         bias_value = -math.log((1 - self.prior_prob) / self.prior_prob)
-        for module in [self.iam_conv, self.cls_score]:
+        for module in [self.iam_conv.start_layer, self.cls_score[0]]:
             init.constant_(module.bias, bias_value)
-        init.normal_(self.iam_conv.weight, std=0.01)
-        init.normal_(self.cls_score.weight, std=0.01)
-
-        init.normal_(self.mask_kernel.weight, std=0.01)
-        init.constant_(self.mask_kernel.bias, 0.0)
-        c2_xavier_fill(self.fc)
+ 
+        for iam_conv, cls_score in zip(self.iam_conv.middle_layers, self.cls_score[1:-1]):
+            for module in [iam_conv, cls_score]:
+                init.constant_(module.bias, bias_value)
+            for iam in iam_conv:
+                init.normal_(iam.weight, std=0.01)
+        for module in [self.iam_conv.end_layer, self.cls_score[-1]]:
+            init.constant_(module.bias, bias_value)
+        for cls_score in self.cls_score:
+            init.normal_(cls_score.weight, std=0.01)
+        for mask_kernel in self.mask_kernel:
+            init.normal_(mask_kernel.weight, std=0.01)
+            init.constant_(mask_kernel.bias, 0.0)
+        for fc in self.fc:
+            for module in fc.modules():
+                if isinstance(module, nn.Linear):
+                    c2_xavier_fill(module)
 
     def iam_map_to_features(self, iam, features):
         B, N = iam.shape[:2]
