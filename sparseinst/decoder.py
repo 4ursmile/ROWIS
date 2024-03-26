@@ -50,6 +50,7 @@ class InstanceDeformableConvBlock(nn.Module):
         out = self.conv1(x)
         out = self.conv2(out)
         residual = self.downsample(x)
+        print(out.shape, residual.shape, x.shape, self.out_channels)
         out += residual
         out = self.relu(out)
         return out
