@@ -111,7 +111,7 @@ class DeformableIAMDouble(nn.Module):
         self.conv.to(self.device)
     def forward(self, x, residual):
         residual = x 
-        out = self.conv(x)
+        out = self.conv(x.clone())
         residual = self.downsample(residual)
         out += residual
         out = self.relu(out)
@@ -136,7 +136,7 @@ class DeformableIAM(nn.Module):
         out= self.start_layer(x)
         hs.append(out)
         for layer in self.middle_layers:
-            out= layer(out, x)
+            out = layer(out, x)
             hs.append(out)
         out= self.end_layer(out)
         hs.append(out)
