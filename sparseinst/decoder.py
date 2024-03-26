@@ -88,7 +88,7 @@ class DeformableIAMDouble(nn.Module):
         )
         self.downsample = nn.Sequential(
             DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
-            nn.Conv2d(out_channels),
+            nn.BatchNorm2d(out_channels),
         )
     def init_weights(self, value):
         for m in self.conv.modules():
