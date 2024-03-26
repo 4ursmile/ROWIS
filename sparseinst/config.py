@@ -31,7 +31,7 @@ def add_sparse_inst_config(cfg):
     # upsample factor for output masks
     cfg.MODEL.SPARSE_INST.DECODER.SCALE_FACTOR = 2.0
     cfg.MODEL.SPARSE_INST.DECODER.OUTPUT_IAM = False
-    cfg.MODEL.SPARSE_INST.DECODER.GROUPS = 4    
+    cfg.MODEL.SPARSE_INST.DECODER.GROUPS = 2
     # decoder.inst_branch
     cfg.MODEL.SPARSE_INST.DECODER.INST = CN()
     cfg.MODEL.SPARSE_INST.DECODER.INST.DIM = 256
