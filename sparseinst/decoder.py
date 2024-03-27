@@ -274,11 +274,8 @@ class BaseIAMDecoder(nn.Module):
     def forward(self, features):
         coord_features = self.compute_coordinates(features)
         features = torch.cat([coord_features, features], dim=1)
-        pred_logitss, pred_kernels, pred_scoress,  iams = self.inst_branch(features)
+        pred_logits, pred_kernel, pred_scores,  iams = self.inst_branch(features)
         mask_features = self.mask_branch(features)
-        pred_logits = pred_logitss[-1]
-        pred_kernel = pred_kernels[-1]
-        pred_scores = pred_scoress[-1]
         iam = iams[-1]
         N = pred_kernel.shape[1]
         # mask_features: BxCxHxW
@@ -317,7 +314,7 @@ class GroupInstanceBranch(nn.Module):
 
         self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
         # iam prediction, a group conv
-        expand_dim = dim * self.num_groups
+        expand_dim = dim * (self.num_groups + 2)
 
         self.iam_conv = DeformableIAM(self.num_groups, dim, num_masks)
         # self.iam_conv = nn.Conv2d(
@@ -340,6 +337,11 @@ class GroupInstanceBranch(nn.Module):
         self.cls_score = _get_clones(self.cls_score, self.num_groups+2)
         self.mask_kernel = _get_clones(self.mask_kernel, self.num_groups+2)
         self.objectness = _get_clones(self.objectness, self.num_groups+2)
+
+        self.cls_head = nn.Linear(self.num_classes * (self.num_groups+2), self.num_classes)
+        self.mask_head = nn.Linear(kernel_dim * (self.num_groups+2), kernel_dim)
+        self.objectness_head = nn.Linear(1 * (self.num_groups+2), 1)
+
         self.prior_prob = 0.01
         self._init_weights()
         torch.autograd.set_detect_anomaly(True)
@@ -351,10 +353,13 @@ class GroupInstanceBranch(nn.Module):
         for cls_score in self.cls_score:
             init.normal_(cls_score.weight, std=0.01)
             init.constant_(cls_score.bias, bias_value)
-
+        init.constant_(self.cls_head.bias, bias_value)
+        init.normal_(self.cls_head.weight, std=0.01)
         for mask_kernel in self.mask_kernel:
             init.normal_(mask_kernel.weight, std=0.01)
             init.constant_(mask_kernel.bias, 0.0)
+        init.normal_(self.mask_head.weight, std=0.01)
+        init.constant_(self.mask_head.bias, 0.0)
         for fc in self.fc:
             for module in fc.modules():
                 if isinstance(module, nn.Linear):
@@ -391,6 +396,9 @@ class GroupInstanceBranch(nn.Module):
         output_logits = torch.stack(output_logits)
         output_masks = torch.stack(output_masks)
         output_scores = torch.stack(output_scores)
+        output_logits = self.cls_head(output_logits.view(-1, self.num_classes*(self.num_groups+2)))
+        output_masks = self.mask_head(output_masks.view(-1, output_masks.size(2)*(self.num_groups+2)))
+        output_scores = self.objectness_head(output_scores.view(-1, 1*(self.num_groups+2)))
         return output_logits, output_masks, output_scores, iams
 
     # def forward(self, features):
