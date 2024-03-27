@@ -387,9 +387,9 @@ class GroupInstanceBranch(nn.Module):
             output_masks.append(pred_kernel)
             output_scores.append(pred_scores)
 
-        output_logits = torch.stack(output_logits)
-        output_masks = torch.stack(output_masks)
-        output_scores = torch.stack(output_scores)
+        output_logits = torch.stack(output_logits, dim=1)
+        output_masks = torch.stack(output_masks, dim=1)
+        output_scores = torch.stack(output_scores, dim=1)
         print("---------------------------")
         print('output_logits', output_logits.shape)
         print('output_masks', output_masks.shape)
