@@ -134,7 +134,7 @@ class DeformableIAM(nn.Module):
         middle_layers = []
         for _ in range(0, num_blocks):
             middle_layers.append(DeformableIAMDouble(out_channels, out_channels, kernel_size, stride))
-        self.middle_layers = middle_layers
+        self.middle_layers = nn.ModuleList(middle_layers)
         self.end_layer = DeformableIAMSingle(out_channels, out_channels, kernel_size, stride)
         self.result_imtermidiate = result_imtermidiate
     def init_weights(self, value):
@@ -338,6 +338,21 @@ class GroupInstanceBranch(nn.Module):
         self.mask_kernel = _get_clones(self.mask_kernel, self.num_groups+2)
         self.objectness = _get_clones(self.objectness, self.num_groups+2)
 
+        self.cls_head = nn.Sequential(
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(kernel_dim*(self.num_groups+2), kernel_dim),
+        )
+        self.mask_head = nn.Sequential(
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(kernel_dim*(self.num_groups+2), kernel_dim),
+        )
+        self.objectness_head = nn.Sequential(
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(kernel_dim*(self.num_groups+2), kernel_dim),
+        )
 
         self.prior_prob = 0.01
         self._init_weights()
@@ -387,13 +402,15 @@ class GroupInstanceBranch(nn.Module):
             output_masks.append(pred_kernel)
             output_scores.append(pred_scores)
 
-        output_logits = torch.stack(output_logits, dim=1)
-        output_masks = torch.stack(output_masks, dim=1)
-        output_scores = torch.stack(output_scores, dim=1)
-        output_logits = output_logits.view(output_logits.shape[0], -1, output_logits.shape[-1])
-        output_masks = output_masks.view(output_masks.shape[0], -1, output_masks.shape[-1])
-        output_scores = output_scores.view(output_scores.shape[0], -1, output_scores.shape[-1])
-
+        output_logits = torch.stack(output_logits, dim=2)
+        output_masks = torch.stack(output_masks, dim=2)
+        output_scores = torch.stack(output_scores, dim=2)
+        output_logits = output_logits.view(output_logits.shape[0], output_logits.shape[1], -1)
+        output_masks = output_masks.view(output_masks.shape[0], output_masks.shape[1], -1)
+        output_scores = output_scores.view(output_scores.shape[0], output_scores.shape[1], -1)
+        output_logits = self.cls_head(output_logits)
+        output_masks = self.mask_head(output_masks)
+        output_scores = self.objectness_head(output_scores)
         return output_logits, output_masks, output_scores, iams
 
     # def forward(self, features):
