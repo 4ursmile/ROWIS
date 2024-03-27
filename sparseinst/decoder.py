@@ -393,11 +393,6 @@ class GroupInstanceBranch(nn.Module):
         output_logits = output_logits.view(output_logits.shape[0], -1, output_logits.shape[-1])
         output_masks = output_masks.view(output_masks.shape[0], -1, output_masks.shape[-1])
         output_scores = output_scores.view(output_scores.shape[0], -1, output_scores.shape[-1])
-        print("---------------------------")
-        print('output_logits', output_logits.shape)
-        print('output_masks', output_masks.shape)
-        print('output_scores', output_scores.shape)
-        print("---------------------------")
 
         return output_logits, output_masks, output_scores, iams
 
