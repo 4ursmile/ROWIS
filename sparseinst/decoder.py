@@ -314,7 +314,7 @@ class GroupInstanceBranch(nn.Module):
 
         self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
         # iam prediction, a group conv
-        expand_dim = dim * (self.num_groups + 2)
+        expand_dim = dim * (self.num_groups)
 
         self.iam_conv = DeformableIAM(self.num_groups, dim, num_masks)
         # self.iam_conv = nn.Conv2d(
