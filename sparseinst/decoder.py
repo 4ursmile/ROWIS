@@ -132,7 +132,7 @@ class DeformableIAM(nn.Module):
         super(DeformableIAM, self).__init__()
         self.start_layer = DeformableIAMSingle(in_channels, out_channels, kernel_size, stride)
         middle_layers = []
-        for _ in range(1, num_blocks):
+        for _ in range(0, num_blocks):
             middle_layers.append(DeformableIAMDouble(out_channels, out_channels, kernel_size, stride))
         self.middle_layers = middle_layers
         self.end_layer = DeformableIAMSingle(out_channels, out_channels, kernel_size, stride)
@@ -390,6 +390,9 @@ class GroupInstanceBranch(nn.Module):
         output_logits = torch.stack(output_logits, dim=1)
         output_masks = torch.stack(output_masks, dim=1)
         output_scores = torch.stack(output_scores, dim=1)
+        output_logits = output_logits.view(output_logits.shape[0], -1, output_logits.shape[-1])
+        output_masks = output_masks.view(output_masks.shape[0], -1, output_masks.shape[-1])
+        output_scores = output_scores.view(output_scores.shape[0], -1, output_scores.shape[-1])
         print("---------------------------")
         print('output_logits', output_logits.shape)
         print('output_masks', output_masks.shape)
