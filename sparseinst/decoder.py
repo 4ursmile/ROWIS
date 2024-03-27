@@ -274,9 +274,12 @@ class BaseIAMDecoder(nn.Module):
     def forward(self, features):
         coord_features = self.compute_coordinates(features)
         features = torch.cat([coord_features, features], dim=1)
-        pred_logits, pred_kernel, pred_scores,  iam = self.inst_branch(features)
+        pred_logitss, pred_kernels, pred_scoress,  iams = self.inst_branch(features)
         mask_features = self.mask_branch(features)
-
+        pred_logits = pred_logitss[-1]
+        pred_kernel = pred_kernels[-1]
+        pred_scores = pred_scoress[-1]
+        iam = iams[-1]
         N = pred_kernel.shape[1]
         # mask_features: BxCxHxW
         B, C, H, W = mask_features.shape
@@ -316,7 +319,7 @@ class GroupInstanceBranch(nn.Module):
         # iam prediction, a group conv
         expand_dim = dim * self.num_groups
 
-        self.iam_conv = nn.parallel.DistributedDataParallel(module=DeformableIAM(self.num_groups, dim, num_masks),device_ids=[torch.cuda.current_device()], output_device= torch.cuda.current_device(), find_unused_parameters=True)
+        self.iam_conv = DeformableIAM(self.num_groups, dim, num_masks)
         # self.iam_conv = nn.Conv2d(
         #     dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
         # outputs
@@ -339,6 +342,8 @@ class GroupInstanceBranch(nn.Module):
         self.objectness = _get_clones(self.objectness, self.num_groups+2)
         self.prior_prob = 0.01
         self._init_weights()
+        torch.autograd.set_detect_anomaly(True)
+
     def _init_weights(self):
         self.inst_convs.init_weights()
         bias_value = -math.log((1 - self.prior_prob) / self.prior_prob)
@@ -386,7 +391,7 @@ class GroupInstanceBranch(nn.Module):
         output_logits = torch.stack(output_logits)
         output_masks = torch.stack(output_masks)
         output_scores = torch.stack(output_scores)
-        return output_logits[-1], output_masks[-1], output_scores[-1], iams[-1]
+        return output_logits, output_masks, output_scores, iams
 
     # def forward(self, features):
     #     # instance features (x4 convs)
