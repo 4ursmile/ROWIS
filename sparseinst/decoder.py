@@ -341,7 +341,7 @@ class GroupInstanceBranch(nn.Module):
         self.cls_head = nn.Sequential(
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(kernel_dim*(self.num_groups+2), kernel_dim),
+            nn.Linear(self.num_classes*(self.num_groups+2), kernel_dim),
         )
         self.mask_head = nn.Sequential(
             nn.ReLU(),
@@ -351,7 +351,7 @@ class GroupInstanceBranch(nn.Module):
         self.objectness_head = nn.Sequential(
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(kernel_dim*(self.num_groups+2), kernel_dim),
+            nn.Linear((self.num_groups+2), kernel_dim),
         )
 
         self.prior_prob = 0.01
