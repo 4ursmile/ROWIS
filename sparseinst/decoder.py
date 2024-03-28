@@ -349,7 +349,7 @@ class GroupInstanceBranch(nn.Module):
             nn.Linear(kernel_dim*(self.num_groups+2), kernel_dim),
         )
         self.objectness_head = nn.Sequential(
-            nn.GeLU(),
+            nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear((self.num_groups+2), 1),
         )
