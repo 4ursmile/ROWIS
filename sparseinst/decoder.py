@@ -349,13 +349,13 @@ class GroupInstanceBranch(nn.Module):
             nn.Linear(kernel_dim*(self.num_groups+2), kernel_dim),
         )
         self.objectness_head = nn.Sequential(
-            nn.ReLU(),
+            nn.GeLU(),
             nn.Dropout(dropout),
             nn.Linear((self.num_groups+2), 1),
         )
 
         self.prior_prob = 0.01
-        #self._init_weights()
+        self._init_weights()
 
     def _init_weights(self):
         self.inst_convs.init_weights()
@@ -378,6 +378,8 @@ class GroupInstanceBranch(nn.Module):
         C = features.size(1)
         # BxNxHxW -> BxNx(HW)
         iam_prob = iam_prob.view(B, N, -1)
+        normalizer = iam_prob.sum(-1).clamp(min=1e-6)
+        iam_prob = iam_prob / normalizer[:, :, None]
         # aggregate features: BxCxHxW -> Bx(HW)xC
         inst_features = torch.bmm(
             iam_prob, features.view(B, C, -1).permute(0, 2, 1))
