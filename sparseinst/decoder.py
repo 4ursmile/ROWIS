@@ -322,6 +322,7 @@ class GroupInstanceBranch(nn.Module):
         # outputs
         dropout = cfg.MODEL.SPARSE_INST.DECODER.INST.DROPOUT
         self.fc = nn.Sequential(
+            nn.LayerNorm(expand_dim),
             nn.Linear(expand_dim, dim),
             nn.ReLU(),
             nn.Dropout(dropout),
@@ -341,16 +342,19 @@ class GroupInstanceBranch(nn.Module):
         self.cls_head = nn.Sequential(
             nn.ReLU(),
             nn.Dropout(dropout),
+            nn.LayerNorm(self.num_classes*(self.num_groups+2)),
             nn.Linear(self.num_classes*(self.num_groups+2), self.num_classes),
         )
         self.mask_head = nn.Sequential(
             nn.ReLU(),
             nn.Dropout(dropout),
+            nn.LayerNorm(kernel_dim*(self.num_groups+2)),
             nn.Linear(kernel_dim*(self.num_groups+2), kernel_dim),
         )
         self.objectness_head = nn.Sequential(
             nn.GELU(),
             nn.Dropout(dropout),
+            nn.LayerNorm((self.num_groups+2)),
             nn.Linear((self.num_groups+2), 1),
         )
 
