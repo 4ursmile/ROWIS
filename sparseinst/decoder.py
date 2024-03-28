@@ -355,8 +355,7 @@ class GroupInstanceBranch(nn.Module):
         )
 
         self.prior_prob = 0.01
-        self._init_weights()
-        torch.autograd.set_detect_anomaly(True)
+        #self._init_weights()
 
     def _init_weights(self):
         self.inst_convs.init_weights()
