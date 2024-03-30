@@ -137,6 +137,7 @@ class SparseInst(nn.Module):
         self.temperature = cfg.MODEL.OWIS.TEMPERATURE
         self.pred_per_image = cfg.MODEL.OWIS.PRED_PER_IMAGE
         self.temperature = cfg.MODEL.OWIS.TEMPERATURE/cfg.MODEL.OWIS.HIDDEN_DIM
+        torch.autograd.set_detect_anomaly(True)
         print(f"Number of parameters: {parameter_count_table(self)}")
     def normalizer(self, image):
         image = (image - self.pixel_mean) / self.pixel_std
