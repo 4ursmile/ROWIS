@@ -3,7 +3,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 from torch.cuda.amp import autocast
 from scipy.optimize import linear_sum_assignment
 from fvcore.nn import sigmoid_focal_loss_jit
@@ -11,7 +10,6 @@ from fvcore.nn import sigmoid_focal_loss_jit
 from detectron2.utils.registry import Registry
 
 from .utils import nested_masks_from_list, is_dist_avail_and_initialized, get_world_size
-from .probhead import sigmoid_focal_loss
 
 SPARSE_INST_MATCHER_REGISTRY = Registry("SPARSE_INST_MATCHER")
 SPARSE_INST_MATCHER_REGISTRY.__doc__ = "Matcher for SparseInst"
@@ -60,8 +58,6 @@ class SparseInstCriterion(nn.Module):
         self.losses = cfg.MODEL.SPARSE_INST.LOSS.ITEMS
         self.weight_dict = self.get_weight_dict(cfg)
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
-        self.min_obj = -cfg.MODEL.SPARSE_INST.DECODER.INST.DIM*math.log(0.9)
-        self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
 
     def get_weight_dict(self, cfg):
         losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness")
@@ -91,9 +87,7 @@ class SparseInstCriterion(nn.Module):
 
     def loss_labels(self, outputs, targets, indices, num_instances, input_shape=None):
         assert "pred_logits" in outputs
-        temp_src_logits = outputs['pred_logits'].clone()
-        temp_src_logits[:,:, self.invalid_cls_logits] = -10e10
-        src_logits = temp_src_logits
+        src_logits = outputs['pred_logits']
         idx = self._get_src_permutation_idx(indices)
         target_classes_o = torch.cat([t["labels"][J]
                                      for t, (_, J) in zip(targets, indices)])
@@ -109,25 +103,15 @@ class SparseInstCriterion(nn.Module):
         labels = torch.zeros_like(src_logits)
         labels[pos_inds, target_classes[pos_inds]] = 1
         # comp focal loss.
-        # class_loss = sigmoid_focal_loss_jit(
-        #     src_logits,
-        #     labels,
-        #     alpha=0.25,
-        #     gamma=2.0,
-        #     reduction="sum",
-        # ) / num_instances
-
-        class_loss = sigmoid_focal_loss(
-            src_logits, labels, num_instances, alpha=0.25, gamma=2.0, num_classes=self.num_classes, empty_weight=0.1
-        ) * src_logits.shape[1]
-
+        class_loss = sigmoid_focal_loss_jit(
+            src_logits,
+            labels,
+            alpha=0.25,
+            gamma=2.0,
+            reduction="sum",
+        ) / num_instances
         losses = {'loss_ce': class_loss}
         return losses
-    def loss_obj_likelihood(self, outputs, targets, indices, num_instances, input_shape):
-        assert "pred_scores" in outputs
-        idx = self._get_src_permutation_idx(indices)
-        pred_obj = outputs['pred_scores'][idx]
-        return torch.clamp(pred_obj, min = self.min_obj).sum() / num_instances
 
     def loss_masks_with_iou_objectness(self, outputs, targets, indices, num_instances, input_shape):
         src_idx = self._get_src_permutation_idx(indices)
@@ -172,6 +156,7 @@ class SparseInstCriterion(nn.Module):
         src_iou_scores = src_iou_scores[src_idx]
         tgt_iou_scores = tgt_iou_scores.flatten(0)
         src_iou_scores = src_iou_scores.flatten(0)
+
         losses = {
             "loss_objectness": F.binary_cross_entropy_with_logits(src_iou_scores, tgt_iou_scores, reduction='mean'),
             "loss_dice": dice_loss(src_masks, target_masks) / num_instances,
@@ -182,12 +167,11 @@ class SparseInstCriterion(nn.Module):
     def get_loss(self, loss, outputs, targets, indices, num_instances, **kwargs):
         loss_map = {
             "labels": self.loss_labels,
-            "masks": self.loss_masks_with_iou_objectness
+            "masks": self.loss_masks_with_iou_objectness,
         }
         if loss == "loss_objectness":
             # NOTE: loss_objectness will be calculated in `loss_masks_with_iou_objectness`
             return {}
-
         assert loss in loss_map
         return loss_map[loss](outputs, targets, indices, num_instances, **kwargs)
 
