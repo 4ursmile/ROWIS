@@ -114,6 +114,7 @@ class DeformableIAMDouble(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
         ).to(device=self.device)
+        self.relu = nn.ReLU()
     def init_weights(self, value):
         for m in self.conv.modules():
             if isinstance(m, nn.Conv2d):
