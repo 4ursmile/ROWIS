@@ -12,7 +12,10 @@ from .encoder import build_sparse_inst_encoder
 from .decoder import build_sparse_inst_decoder
 from .loss import build_sparse_inst_criterion
 from .utils import nested_tensor_from_tensor_list
+import typing
+from collections import defaultdict
 
+import tabulate
 __all__ = ["SparseInst"]
 
 
@@ -21,7 +24,79 @@ def rescoring_mask(scores, mask_pred, masks):
     mask_pred_ = mask_pred.float()
     return scores * ((masks * mask_pred_).sum([1, 2]) / (mask_pred_.sum([1, 2]) + 1e-6))
 
+def parameter_count(model: nn.Module) -> typing.DefaultDict[str, int]:
+    """
+    Count parameters of a model and its submodules.
 
+    Args:
+        model: a torch module
+
+    Returns:
+        dict (str-> int): the key is either a parameter name or a module name.
+        The value is the number of elements in the parameter, or in all
+        parameters of the module. The key "" corresponds to the total
+        number of parameters of the model.
+    """
+    r = defaultdict(int)
+    for name, prm in model.named_parameters():
+        size = prm.numel()
+        name = name.split(".")
+        for k in range(0, len(name) + 1):
+            prefix = ".".join(name[:k])
+            r[prefix] += size
+    return r
+def parameter_count_table(model: nn.Module, max_depth: int = 3) -> str:
+    """
+    Format the parameter count of the model (and its submodules or parameters)
+    in a nice table.
+    Args:
+        model: a torch module
+        max_depth (int): maximum depth to recursively print submodules or
+            parameters
+
+    Returns:
+        str: the table to be printed
+    """
+    count: typing.DefaultDict[str, int] = parameter_count(model)
+    # pyre-fixme[24]: Generic type `tuple` expects at least 1 type parameter.
+    param_shape: typing.Dict[str, typing.Tuple] = {
+        k: tuple(v.shape) for k, v in model.named_parameters()
+    }
+
+    # pyre-fixme[24]: Generic type `tuple` expects at least 1 type parameter.
+    table: typing.List[typing.Tuple] = []
+
+    def format_size(x: int) -> str:
+        if x > 1e8:
+            return "{:.1f}G".format(x / 1e9)
+        if x > 1e5:
+            return "{:.1f}M".format(x / 1e6)
+        if x > 1e2:
+            return "{:.1f}K".format(x / 1e3)
+        return str(x)
+
+    def fill(lvl: int, prefix: str) -> None:
+        if lvl >= max_depth:
+            return
+        for name, v in count.items():
+            if name.count(".") == lvl and name.startswith(prefix):
+                indent = " " * (lvl + 1)
+                if name in param_shape:
+                    table.append((indent + name, indent + str(param_shape[name])))
+                else:
+                    table.append((indent + name, indent + format_size(v)))
+                    fill(lvl + 1, name + ".")
+
+    table.append(("model", format_size(count.pop(""))))
+    fill(0, "")
+
+    old_ws = tabulate.PRESERVE_WHITESPACE
+    tabulate.PRESERVE_WHITESPACE = True
+    tab = tabulate.tabulate(
+        table, headers=["name", "#elements or shape"], tablefmt="pipe"
+    )
+    tabulate.PRESERVE_WHITESPACE = old_ws
+    return tab
 @META_ARCH_REGISTRY.register()
 class SparseInst(nn.Module):
 
@@ -56,7 +131,13 @@ class SparseInst(nn.Module):
         self.cls_threshold = cfg.MODEL.SPARSE_INST.CLS_THRESHOLD
         self.mask_threshold = cfg.MODEL.SPARSE_INST.MASK_THRESHOLD
         self.max_detections = cfg.MODEL.SPARSE_INST.MAX_DETECTIONS
+        self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
 
+        self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
+        self.temperature = cfg.MODEL.OWIS.TEMPERATURE
+        self.pred_per_image = cfg.MODEL.OWIS.PRED_PER_IMAGE
+        self.temperature = cfg.MODEL.OWIS.TEMPERATURE/cfg.MODEL.OWIS.HIDDEN_DIM
+        print(f"Number of parameters: {parameter_count_table(self)}")
     def normalizer(self, image):
         image = (image - self.pixel_mean) / self.pixel_std
         return image
