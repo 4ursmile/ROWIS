@@ -438,15 +438,15 @@ class GroupInstanceBranch(nn.Module):
         pred_scores = []
         for i, iam in enumerate(iams):
             inst_features = self.iam_to_features(iam, features)
-            inst_features = F.relu_(self.fcs[i](inst_features))
+            inst_features = self.fcs[i](inst_features)
             # predict classification & segmentation kernel & objectness
             pred_logits.append(self.cls_scores[i](inst_features))
             pred_kernels.append(self.mask_kernels[i](inst_features))
             pred_scores.append(self.objectnesses[i](inst_features))
         
-        pred_logits = torch.concat(pred_logits, dim=2)
-        pred_kernels = torch.concat(pred_kernels, dim=2)
-        pred_scores = torch.concat(pred_scores, dim=2)
+        pred_logits = torch.concat(pred_logits, dim=-1)
+        pred_kernels = torch.concat(pred_kernels, dim=-1)
+        pred_scores = torch.concat(pred_scores, dim=-1)
         print(pred_logits.shape, pred_kernels.shape, pred_scores.shape)
         pred_logit = self.cls_head(pred_logits)
         pred_kernel = self.mask_head(pred_kernels)
