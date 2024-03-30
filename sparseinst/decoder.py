@@ -37,7 +37,7 @@ class InstanceDeformableConvBlock(nn.Module):
         super(InstanceDeformableConvBlock, self).__init__()
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.conv1 = nn.Sequential(
-            DeformableConv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(True)
         ).to(device=self.device)
@@ -46,7 +46,7 @@ class InstanceDeformableConvBlock(nn.Module):
             nn.BatchNorm2d(out_channels)
         ).to(device=self.device)
         self.downsample = nn.Sequential(
-            DeformableConv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
+            nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
             nn.BatchNorm2d(out_channels),
         ).to(device=self.device)
         self.relu = nn.ReLU()
@@ -74,6 +74,11 @@ class InstanceDeformableConv(nn.Module):
         for m in self.modules():
             if isinstance(m, DeformableConv2d):
                 m.init_weights()
+            else: 
+                for m in m.modules():
+                    if isinstance(m, nn.Conv2d):
+                        init.constant_(m.bias, 0)
+                        init.normal_(m.weight, std=0.1)
     def forward(self, x):
         return self.layers(x)
 class DeformableIAMSingle(nn.Module):
