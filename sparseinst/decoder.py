@@ -326,9 +326,9 @@ class GroupInstanceBranch(nn.Module):
 
         # self.iam_conv = nn.Conv2d(
         #     dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
-        self.iam_conv = DeformableIAM(in_channels=dim, out_channels=num_masks*self.num_groups, kernel_size=3, stride=1, result_imtermidiate=False)
+        self.iam_conv = DeformableIAM(in_channels=dim, out_channels=num_masks, kernel_size=3, stride=1, result_imtermidiate=False)
         # outputs
-        self.fc = nn.Linear(expand_dim, expand_dim)
+        self.fc = nn.Linear(dim, expand_dim)
         self.cls_score = nn.Linear(expand_dim, self.num_classes)
         self.mask_kernel = nn.Linear(expand_dim, kernel_dim)
         self.objectness = nn.Linear(expand_dim, 1)
@@ -344,9 +344,9 @@ class GroupInstanceBranch(nn.Module):
             self.iam_conv.init_weights(bias_value)
         # for module in [self.iam_conv, self.cls_score]:
         #     init.constant_(module.bias, bias_value)
-        init.normal_(self.cls_score.weight, std=0.1)
+        init.normal_(self.cls_score.weight, std=0.01)
         init.constant_(self.cls_score.bias, bias_value)
-        init.normal_(self.mask_kernel.weight, std=0.1)
+        init.normal_(self.mask_kernel.weight, std=0.01)
         init.constant_(self.mask_kernel.bias, 0.0)
         if isinstance(self.fc, nn.Linear):
                 c2_xavier_fill(self.fc)
@@ -371,8 +371,9 @@ class GroupInstanceBranch(nn.Module):
             inst_features = torch.bmm(
                 iam_prob, features.view(B, C, -1).permute(0, 2, 1))
 
-            inst_features = inst_features.reshape(
-                B, 4, N // self.num_groups, -1).transpose(1, 2).reshape(B, N // self.num_groups, -1)
+            # inst_features = inst_features.reshape(
+            #     B, 4, N // self.num_groups, -1).transpose(1, 2).reshape(B, N // self.num_groups, -1)
+            
 
             inst_features = F.relu_(self.fc(inst_features))
             # predict classification & segmentation kernel & objectness
