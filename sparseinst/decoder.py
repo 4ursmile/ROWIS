@@ -154,7 +154,8 @@ class DeformableIAM(nn.Module):
     def init_weights(self, value):
         self.start_layer.init_weights(value)
         for layer in self.middle_layers:
-            layer.init_weights(value)
+            if isinstance(layer, DeformableIAMDouble):
+                layer.init_weights(value)
         self.end_layer.init_weights(value)
     def forward(self, x):
         out= self.start_layer(x)
