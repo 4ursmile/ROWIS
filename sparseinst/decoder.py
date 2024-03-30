@@ -326,7 +326,7 @@ class GroupInstanceBranch(nn.Module):
 
         # self.iam_conv = nn.Conv2d(
         #     dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
-        self.iam_conv = DeformableIAM(num_blocks=self.num_groups-2, in_channels=dim, out_channels=num_masks*self.num_groups, kernel_size=3, stride=1, result_imtermidiate=False)
+        self.iam_conv = DeformableIAM(in_channels=dim, out_channels=num_masks*self.num_groups, kernel_size=3, stride=1, result_imtermidiate=False)
         # outputs
         self.fc = nn.Sequential(
             nn.Linear(expand_dim, expand_dim),
@@ -335,7 +335,6 @@ class GroupInstanceBranch(nn.Module):
         self.cls_score = nn.Linear(expand_dim, self.num_classes)
         self.mask_kernel = nn.Linear(expand_dim, kernel_dim)
         self.objectness = nn.Linear(expand_dim, 1)
-
 
         self.prior_prob = 0.01
         self._init_weights()
