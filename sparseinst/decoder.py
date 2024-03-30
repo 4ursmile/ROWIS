@@ -328,7 +328,7 @@ class GroupInstanceBranch(nn.Module):
         #     dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
         self.iam_conv = DeformableIAM(in_channels=dim, out_channels=num_masks*self.num_groups, kernel_size=3, stride=1, result_imtermidiate=False)
         # outputs
-        self.fc = expand_dim
+        self.fc = nn.Linear(expand_dim, expand_dim)
         self.cls_score = nn.Linear(expand_dim, self.num_classes)
         self.mask_kernel = nn.Linear(expand_dim, kernel_dim)
         self.objectness = nn.Linear(expand_dim, 1)
