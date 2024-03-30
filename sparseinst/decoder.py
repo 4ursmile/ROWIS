@@ -140,28 +140,20 @@ class DeformableIAMDouble(nn.Module):
         out += residual
         out = self.relu(out)
         return out
+
 class DeformableIAM(nn.Module):
-    def __init__(self, num_blocks, in_channels, out_channels, kernel_size=3, stride = 1, result_imtermidiate = False):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1, result_imtermidiate = False):
         super(DeformableIAM, self).__init__()
         self.start_layer = DeformableIAMSingle(in_channels, out_channels, kernel_size, stride)
-        middle_layers = []
-        for _ in range(0, num_blocks):
-            middle_layers.append(DeformableIAMDouble(out_channels, out_channels, kernel_size, stride))
-            middle_layers.append(nn.MaxPool2d(kernel_size=2, stride=1, padding=1))
-        self.middle_layers = nn.ModuleList(middle_layers)
-        self.end_layer = DeformableIAMSingle(out_channels, out_channels, kernel_size, stride)
+
+        self.end_layer = DeformableIAMDouble(out_channels, out_channels, kernel_size, stride)
         self.result_imtermidiate = result_imtermidiate
     def init_weights(self, value):
         self.start_layer.init_weights(value)
-        for layer in self.middle_layers:
-            if isinstance(layer, DeformableIAMDouble):
-                layer.init_weights(value)
         self.end_layer.init_weights(value)
     def forward(self, x):
         out= self.start_layer(x)
-        for layer in self.middle_layers:
-            out = layer(out, x)
-        out= self.end_layer(out)
+        out= self.end_layer(x, out)
         return out
         
 class InstanceBranch(nn.Module):
