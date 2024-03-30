@@ -37,7 +37,7 @@ class InstanceDeformableConvBlock(nn.Module):
         super(InstanceDeformableConvBlock, self).__init__()
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride),
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(True)
         ).to(device=self.device)
