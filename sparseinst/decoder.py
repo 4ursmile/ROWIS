@@ -153,7 +153,7 @@ class DeformableIAM(nn.Module):
         self.end_layer.init_weights(value)
     def forward(self, x):
         out= self.start_layer(x)
-        out= self.end_layer(x, out)
+        out= self.end_layer(out, x)
         return out
         
 class InstanceBranch(nn.Module):
