@@ -447,7 +447,7 @@ class GroupInstanceBranch(nn.Module):
         pred_logits = torch.concat(pred_logits, dim=2)
         pred_kernels = torch.concat(pred_kernels, dim=2)
         pred_scores = torch.concat(pred_scores, dim=2)
-
+        print(pred_logits.shape, pred_kernels.shape, pred_scores.shape)
         pred_logit = self.cls_head(pred_logits)
         pred_kernel = self.mask_head(pred_kernels)
         pred_score = self.objectness_head(pred_scores)
