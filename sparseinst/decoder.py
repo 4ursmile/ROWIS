@@ -77,8 +77,7 @@ class InstanceDeformableConv(nn.Module):
             else: 
                 for m in m.modules():
                     if isinstance(m, nn.Conv2d):
-                        init.constant_(m.bias, 0)
-                        init.normal_(m.weight, std=0.1)
+                        c2_msra_fill(m)
     def forward(self, x):
         return self.layers(x)
 class DeformableIAMSingle(nn.Module):
@@ -121,9 +120,16 @@ class DeformableIAMDouble(nn.Module):
             if isinstance(m, nn.Conv2d):
                 init.constant_(m.bias, value)
                 init.normal_(m.weight, std=0.1)
-        for m in self.downsample.modules():
-            if isinstance(m, DeformableConv2d):
+            elif isinstance(m, DeformableConv2d):
                 m.init_weights()
+        for m in self.conv2.modules():
+            if isinstance(m, nn.Conv2d):
+                c2_msra_fill(m)
+            elif isinstance(m, DeformableConv2d):
+                m.init_weights()
+        for m in self.downsample.modules():
+            if isinstance(m, nn.Conv2d):
+                c2_msra_fill(m)
         self.downsample.to(self.device)
         self.conv.to(self.device)
     def forward(self, x, residual):
@@ -332,7 +338,10 @@ class GroupInstanceBranch(nn.Module):
         #     dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
         self.iam_conv = DeformableIAM(num_blocks=self.num_groups-2, in_channels=dim, out_channels=num_masks*self.num_groups, kernel_size=3, stride=1, result_imtermidiate=False)
         # outputs
-        self.fc = nn.Linear(expand_dim, expand_dim)
+        self.fc = nn.Sequential(
+            nn.Linear(expand_dim, expand_dim),
+            nn.ReLU()
+        )
         self.cls_score = nn.Linear(expand_dim, self.num_classes)
         self.mask_kernel = nn.Linear(expand_dim, kernel_dim)
         self.objectness = nn.Linear(expand_dim, 1)
@@ -342,26 +351,67 @@ class GroupInstanceBranch(nn.Module):
         self.mask_kernels = _get_clones(self.mask_kernel, self.num_groups)
         self.objectnesses = _get_clones(self.objectness, self.num_groups)
 
-        self.cls_head = nn.Linear(expand_dim*self.num_groups, self.num_classes)
-        self.mask_head = nn.Linear(expand_dim*self.num_groups, kernel_dim)
-        self.objectness_head = nn.Linear(expand_dim*self.num_groups, 1)
+        self.cls_head = nn.Sequential(
+            nn.Dropout(0.3),
+            nn.ReLU(),
+            nn.Linear(self.num_classes*self.num_groups, self.num_classes)
+        )
+        self.mask_head = nn.Sequential(
+            nn.Dropout(0.3),
+            nn.ReLU(),
+            nn.Linear(kernel_dim*self.num_groups, kernel_dim)
+        )
+        self.objectness_head = nn.Sequential(
+            nn.Dropout(0.3),
+            nn.ReLU(),
+            nn.Linear(self.num_groups, 1)
+        )
 
         self.prior_prob = 0.01
         self._init_weights()
 
     def _init_weights(self):
-        for m in self.inst_convs.modules():
-            if isinstance(m, nn.Conv2d):
-                c2_msra_fill(m)
+        # for m in self.inst_convs.modules():
+        #     if isinstance(m, nn.Conv2d):
+        #         c2_msra_fill(m)
         bias_value = -math.log((1 - self.prior_prob) / self.prior_prob)
-        for module in [self.iam_conv, self.cls_score]:
-            init.constant_(module.bias, bias_value)
-        init.normal_(self.iam_conv.weight, std=0.01)
-        init.normal_(self.cls_score.weight, std=0.01)
+        # for module in [self.iam_conv, self.cls_score]:
+        #     init.constant_(module.bias, bias_value)
+        # init.normal_(self.iam_conv.weight, std=0.01)
+        # init.normal_(self.cls_score.weight, std=0.01)
 
-        init.normal_(self.mask_kernel.weight, std=0.01)
-        init.constant_(self.mask_kernel.bias, 0.0)
-        c2_xavier_fill(self.fc)
+        # init.normal_(self.mask_kernel.weight, std=0.01)
+        # init.constant_(self.mask_kernel.bias, 0.0)
+        # c2_xavier_fill(self.fc)
+        if isinstance(self.inst_convs, InstanceDeformableConv):
+            self.inst_convs.init_weights()
+        if isinstance(self.iam_conv, DeformableIAM):
+            self.iam_conv.init_weights(value=bias_value)
+        for ms in self.fcs:
+            for m in ms.modules():
+                if isinstance(m, nn.Linear):
+                    c2_xavier_fill(m)
+        for m in self.cls_scores:
+            if isinstance(m, nn.Linear):
+                init.constant_(m.bias, bias_value)
+                init.normal_(m.weight, std=0.1)
+        for m in self.mask_kernels:
+            if isinstance(m, nn.Linear):
+                init.normal_(m.weight, std=0.1)
+                init.constant_(m.bias, 0.0)
+        for m in self.objectnesses:
+            if isinstance(m, nn.Linear):
+                init.normal_(m.weight, std=0.1)
+                init.constant_(m.bias, 0.0)
+        for m in self.cls_head.modules():
+            if isinstance(m, nn.Linear):
+                c2_xavier_fill(m)
+        for m in self.mask_head.modules():
+            if isinstance(m, nn.Linear):
+                c2_xavier_fill(m)
+        for m in self.objectness_head.modules():
+            if isinstance(m, nn.Linear):
+                c2_xavier_fill(m)
 
     def iam_to_features(self, iam, features):
         iam_prob = iam.sigmoid()
