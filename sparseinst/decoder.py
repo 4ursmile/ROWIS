@@ -357,9 +357,13 @@ class GroupInstanceBranch(nn.Module):
         init.normal_(self.objectness.weight, std=0.01)
         init.constant_(self.objectness.bias, 0)
 
-
-    def iam_to_features(self, iam, features):
+    def forward(self, features):
+        # instance features (x4 convs)
+        features = self.inst_convs(features)
+        # predict instance activation maps
+        iam = self.iam_conv(features)
         iam_prob = iam.sigmoid()
+
         B, N = iam_prob.shape[:2]
         C = features.size(1)
         # BxNxHxW -> BxNx(HW)
@@ -370,47 +374,16 @@ class GroupInstanceBranch(nn.Module):
         # aggregate features: BxCxHxW -> Bx(HW)xC
         inst_features = torch.bmm(
             iam_prob, features.view(B, C, -1).permute(0, 2, 1))
-        inst_features = inst_features.reshape(
-            B, self.num_groups, N // self.num_groups, -1).transpose(1, 2).reshape(B, N // self.num_groups, -1)
-        return inst_features
-    def forward(self, features):
-        # instance features (x4 convs)
-        features = self.inst_convs(features)
 
-        iams = self.iam_conv(features)
-        inst_features = self.iam_to_features(iams, features)
+        inst_features = inst_features.reshape(
+            B, 4, N // self.num_groups, -1).transpose(1, 2).reshape(B, N // self.num_groups, -1)
+
         inst_features = self.fc(inst_features)
         # predict classification & segmentation kernel & objectness
         pred_logits = self.cls_score(inst_features)
         pred_kernel = self.mask_kernel(inst_features)
         pred_scores = self.objectness(inst_features)
-        return pred_logits, pred_kernel, pred_scores, iams
-
-
-        # # predict instance activation maps
-        # iam = self.iam_conv(features)
-        # iam_prob = iam.sigmoid()
-
-        # B, N = iam_prob.shape[:2]
-        # C = features.size(1)
-        # # BxNxHxW -> BxNx(HW)
-        # iam_prob = iam_prob.view(B, N, -1)
-        # normalizer = iam_prob.sum(-1).clamp(min=1e-6)
-        # iam_prob = iam_prob / normalizer[:, :, None]
-
-        # # aggregate features: BxCxHxW -> Bx(HW)xC
-        # inst_features = torch.bmm(
-        #     iam_prob, features.view(B, C, -1).permute(0, 2, 1))
-
-        # inst_features = inst_features.reshape(
-        #     B, 4, N // self.num_groups, -1).transpose(1, 2).reshape(B, N // self.num_groups, -1)
-
-        # inst_features = F.relu_(self.fc(inst_features))
-        # # predict classification & segmentation kernel & objectness
-        # pred_logits = self.cls_score(inst_features)
-        # pred_kernel = self.mask_kernel(inst_features)
-        # pred_scores = self.objectness(inst_features)
-        # return pred_logits, pred_kernel, pred_scores, iam
+        return pred_logits, pred_kernel, pred_scores, iam
 
 
 @SPARSE_INST_DECODER_REGISTRY.register()
