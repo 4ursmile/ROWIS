@@ -317,8 +317,8 @@ class GroupInstanceBranch(nn.Module):
         self.num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
 
-        #self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim)
-        self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
+        self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim)
+        #self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
         if self.num_groups < 2: 
             self.num_groups = 2
         # iam prediction, a group conv
