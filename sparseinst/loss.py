@@ -87,6 +87,7 @@ class SparseInstCriterion(nn.Module):
 
     def loss_labels(self, outputs, targets, indices, num_instances, input_shape=None):
         assert "pred_logits" in outputs
+        assert "pred_scores" in outputs
         src_logits = outputs['pred_logits']
         pred_objectness = outputs['pred_scores'].sigmoid()  
         src_logits = torch.sqrt(src_logits*pred_objectness)
