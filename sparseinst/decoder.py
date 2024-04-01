@@ -19,6 +19,7 @@ from torch import tensor
 class SelfAttention(nn.Module):
     "Self attention layer for `n_channels`."
     def __init__(self, n_channels):
+        super(SelfAttention, self).__init__()
         self.query,self.key,self.value = [self._conv(n_channels, c) for c in (n_channels//8,n_channels//8,n_channels)]
         self.gamma = nn.Parameter(tensor([0.]))
 
