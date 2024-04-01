@@ -89,8 +89,7 @@ class SparseInstCriterion(nn.Module):
         assert "pred_logits" in outputs
         assert "pred_scores" in outputs
         src_logits = outputs['pred_logits']
-        pred_objectness = torch.sigmoid(outputs['pred_scores'])
-        src_logits = torch.sqrt(torch.softmax(src_logits, dim=-1)*pred_objectness)
+        src_logits = torch.softmax(src_logits, dim=-1)
         
         idx = self._get_src_permutation_idx(indices)
         target_classes_o = torch.cat([t["labels"][J]
