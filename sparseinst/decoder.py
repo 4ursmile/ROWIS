@@ -23,7 +23,7 @@ class SelfAttention(nn.Module):
         self.gamma = nn.Parameter(tensor([0.]))
 
     def _conv(self,n_in,n_out):
-        return nn.Conv2d(n_in, n_out, ks=1, ndim=1, bias=False)
+        return nn.Conv2d(n_in, n_out, kernel_size=1, bias=False)
 
     def forward(self, x):
         #Notation from the paper.
