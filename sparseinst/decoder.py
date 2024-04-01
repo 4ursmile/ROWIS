@@ -29,8 +29,10 @@ class SelfAttention(nn.Module):
     def forward(self, x):
         #Notation from the paper.
         size = x.size()
+        print(size)
         #x = x.view(*size[:2],-1)
         f,g,h = self.query(x),self.key(x),self.value(x)
+        print(f.shape, g.shape, h.shape)
         beta = F.softmax(torch.bmm(f.transpose(1,2), g), dim=1)
         o = self.gamma * torch.bmm(h, beta) + x
         return o.view(*size).contiguous()
