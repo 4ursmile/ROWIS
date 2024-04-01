@@ -32,11 +32,8 @@ class SelfAttention(nn.Module):
         #x = x.view(*size[:2],-1)
         f,g,h = self.query(x),self.key(x),self.value(x)
         n = len(f.shape)
-        print(f.shape, g.shape, h.shape, x.shape)
-
         beta = F.softmax(torch.matmul(f.transpose(n-2,n-1), g), dim=n-2)
-        print(beta.shape)
-        o = self.gamma * torch.matmul(h, beta) + x
+        o = self.gamma * torch.matmul(h, beta.transpose(n-2, n-1)) + x
         return o.view(*size).contiguous()
 
 def _get_clones(module, N):
