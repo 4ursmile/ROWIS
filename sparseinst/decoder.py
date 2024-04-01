@@ -14,7 +14,25 @@ from sparseinst.encoder import SPARSE_INST_ENCODER_REGISTRY
 from .probhead import ProbObjectnessHead, ProbObjectnessHeadBlock, ProbObjectnessHeadBlockStack
 from .dcn import DeformableConv2d
 import copy
+from torch import tensor
 
+class SelfAttention(nn.Module):
+    "Self attention layer for `n_channels`."
+    def __init__(self, n_channels):
+        self.query,self.key,self.value = [self._conv(n_channels, c) for c in (n_channels//8,n_channels//8,n_channels)]
+        self.gamma = nn.Parameter(tensor([0.]))
+
+    def _conv(self,n_in,n_out):
+        return nn.Conv2d(n_in, n_out, ks=1, ndim=1, bias=False)
+
+    def forward(self, x):
+        #Notation from the paper.
+        size = x.size()
+        x = x.view(*size[:2],-1)
+        f,g,h = self.query(x),self.key(x),self.value(x)
+        beta = F.softmax(torch.bmm(f.transpose(1,2), g), dim=1)
+        o = self.gamma * torch.bmm(h, beta) + x
+        return o.view(*size).contiguous()
 
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
@@ -25,11 +43,12 @@ SPARSE_INST_DECODER_REGISTRY.__doc__ = "registry for SparseInst decoder"
 
 def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
     convs = []
-    for _ in range(num_convs):
+    for _ in range(num_convs-1):
         convs.append(
             Conv2d(in_channels, out_channels, 3, padding=1))
         convs.append(nn.ReLU(True))
         in_channels = out_channels
+    convs.append(SelfAttention(out_channels))
     return nn.Sequential(*convs)
 
 class InstanceDeformableConvBlock(nn.Module):
