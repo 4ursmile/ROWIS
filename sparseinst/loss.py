@@ -89,7 +89,7 @@ class SparseInstCriterion(nn.Module):
         assert "pred_logits" in outputs
         assert "pred_scores" in outputs
         src_logits = outputs['pred_logits']
-        pred_objectness = outputs['pred_scores']
+        pred_objectness = torch.sigmoid(outputs['pred_scores'])
         print(pred_objectness.shape, src_logits.shape) 
         print(pred_objectness)
 
