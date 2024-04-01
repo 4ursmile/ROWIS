@@ -89,7 +89,7 @@ class SparseInstCriterion(nn.Module):
         assert "pred_logits" in outputs
         assert "pred_scores" in outputs
         src_logits = outputs['pred_logits']
-        pred_objectness = outputs['pred_scores'].sigmoid() 
+        pred_objectness = outputs['pred_scores']
         print(pred_objectness.shape, src_logits.shape) 
         src_logits = torch.sqrt(src_logits*pred_objectness)
         idx = self._get_src_permutation_idx(indices)
@@ -112,9 +112,9 @@ class SparseInstCriterion(nn.Module):
             labels,
             alpha=0.25,
             gamma=2.0,
-            reduction="sum",
-        ) / num_instances
-        losses = {'loss_ce': class_loss}
+            reduction=None,
+        )
+        losses = {'loss_ce': torch.sum(class_loss) / num_instances}
         return losses
 
     def loss_masks_with_iou_objectness(self, outputs, targets, indices, num_instances, input_shape):
