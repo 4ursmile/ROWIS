@@ -31,9 +31,9 @@ class SelfAttention(nn.Module):
         size = x.size()
         #x = x.view(*size[:2],-1)
         f,g,h = self.query(x),self.key(x),self.value(x)
+        print(h.shape, x.shape, f.shape, g.shape)
         
         beta = F.softmax(torch.matmul(f.transpose(1,2), g), dim=1)
-        print(beta.shape, h.shape, x.shape, f.shape, g.shape)
         o = self.gamma * torch.matmul(h, beta) + x
         return o.view(*size).contiguous()
 
