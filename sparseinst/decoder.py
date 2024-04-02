@@ -45,11 +45,12 @@ SPARSE_INST_DECODER_REGISTRY.__doc__ = "registry for SparseInst decoder"
 
 def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
     convs = []
-    for _ in range(num_convs):
+    for _ in range(num_convs-1):
         convs.append(
             Conv2d(in_channels, out_channels, 3, padding=1))
         convs.append(nn.ReLU(True))
         in_channels = out_channels
+    convs.append(SelfAttention(out_channels))
     return nn.Sequential(*convs)
 
 class InstanceDeformableConvBlock(nn.Module):

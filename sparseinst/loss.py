@@ -87,10 +87,7 @@ class SparseInstCriterion(nn.Module):
 
     def loss_labels(self, outputs, targets, indices, num_instances, input_shape=None):
         assert "pred_logits" in outputs
-        assert "pred_scores" in outputs
         src_logits = outputs['pred_logits']
-        src_logits = torch.softmax(src_logits, dim=-1)
-        
         idx = self._get_src_permutation_idx(indices)
         target_classes_o = torch.cat([t["labels"][J]
                                      for t, (_, J) in zip(targets, indices)])
@@ -111,9 +108,9 @@ class SparseInstCriterion(nn.Module):
             labels,
             alpha=0.25,
             gamma=2.0,
-            reduction="none",
-        )
-        losses = {'loss_ce': torch.sum(class_loss) / num_instances}
+            reduction="sum",
+        ) / num_instances
+        losses = {'loss_ce': class_loss}
         return losses
 
     def loss_masks_with_iou_objectness(self, outputs, targets, indices, num_instances, input_shape):
