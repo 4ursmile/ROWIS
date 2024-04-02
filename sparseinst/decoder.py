@@ -33,8 +33,7 @@ class SelfAttention(nn.Module):
         f,g,h = self.query(x),self.key(x),self.value(x)
         
         beta = F.softmax(torch.einsum('xyzw,xzlw->xylw' ,torch.transpose(g, 1, 2), f), dim=1)
-        print(beta.shape)
-        o = self.gamma * torch.matmul(h, beta) + x
+        o = self.gamma * torch.einsum('xyzw,xzlw->xylw', h, beta) + x
         return o.view(*size).contiguous()
 
 def _get_clones(module, N):
@@ -46,7 +45,7 @@ SPARSE_INST_DECODER_REGISTRY.__doc__ = "registry for SparseInst decoder"
 
 def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
     convs = []
-    for _ in range(num_convs-1):
+    for _ in range(num_convs):
         convs.append(
             Conv2d(in_channels, out_channels, 3, padding=1))
         convs.append(nn.ReLU(True))
