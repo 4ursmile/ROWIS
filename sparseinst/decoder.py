@@ -373,14 +373,20 @@ class GroupInstanceBranch(nn.Module):
         c2_msra_fill(self.iam_conv)
         # for module in [self.iam_conv, self.cls_score]:
         #     init.constant_(module.bias, bias_value)
-        init.normal_(self.cls_score.weight, std=0.01)
-        init.constant_(self.cls_score.bias, bias_value)
-        init.normal_(self.mask_kernel.weight, std=0.01)
-        init.constant_(self.mask_kernel.bias, 0.0)
+        for m in self.cls_score.modules():
+            if isinstance(m, nn.Linear):
+                init.normal_(self.cls_score.weight, std=0.01)
+                init.constant_(self.cls_score.bias, bias_value)
+        for m in self.mask_kernel.modules():
+            if isinstance(m, nn.Linear):
+                init.normal_(m.weight, std=0.01)
+                init.constant_(m.bias, 0.0)
         if isinstance(self.fc, nn.Linear):
                 c2_xavier_fill(self.fc)
-        init.normal_(self.objectness.weight, std=0.01)
-        init.constant_(self.objectness.bias, 0)
+        for m in self.objectness.modules():
+            if isinstance(m, nn.Linear):
+                init.normal_(m.weight, std=0.01)
+                init.constant_(m.bias, 0.0)
 
     def forward(self, features):
             # instance features (x4 convs)
