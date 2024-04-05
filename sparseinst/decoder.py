@@ -349,7 +349,7 @@ class GroupInstanceBranch(nn.Module):
             dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
         self.fc = nn.Linear(expand_dim, expand_dim)
         self.cls_score = nn.Sequential(
-            nn.Linear(dim, self.num_classes)
+            nn.Linear(expand_dim, self.num_classes)
         )
         self.mask_kernel = nn.Sequential(
             nn.Linear(expand_dim, dim),
