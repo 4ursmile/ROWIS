@@ -31,7 +31,7 @@ import tabulate
 from torch import nn
 sys.path.append(".")
 from sparseinst import add_sparse_inst_config, COCOMaskEvaluator
-import argparse
+
 
 class Trainer(DefaultTrainer):
 
@@ -237,16 +237,9 @@ def parameter_count_table(model: nn.Module, max_depth: int = 3) -> str:
     tabulate.PRESERVE_WHITESPACE = old_ws
     return tab
 
-
-def parse_new_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--datapath", type=str, default="/kaggle/input/coco-2017-dataset/coco2017")
-    return parser.parse_args()
-
 def main(args):
     os.system("nvidia-smi")
-    custom_args = parse_new_args()
-    base_path = custom_args.datapath
+    base_path = '/kaggle/input/coco-2017-dataset/coco2017'
     register_coco_instances("coco_train", {}, base_path+"/annotations/instances_train2017.json", base_path + "/train2017")
     register_coco_instances("coco_val", {}, base_path + "/annotations/instances_val2017.json", base_path + "/val2017")
 
