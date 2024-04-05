@@ -239,8 +239,9 @@ def parameter_count_table(model: nn.Module, max_depth: int = 3) -> str:
 
 def main(args):
     os.system("nvidia-smi")
-    register_coco_instances("coco_train", {}, "/kaggle/input/coco2017/annotations/instances_train2017.json", "/kaggle/input/coco2017/train2017")
-    register_coco_instances("coco_val", {}, "/kaggle/input/coco2017/annotations/instances_val2017.json", "/kaggle/input/coco2017/val2017")
+    base_path = '/kaggle/input/coco-2017-dataset/coco2017'
+    register_coco_instances("coco_train", {}, base_path+"/annotations/instances_train2017.json", base_path + "/train2017")
+    register_coco_instances("coco_val", {}, base_path + "/annotations/instances_val2017.json", base_path + "/val2017")
 
 
     cfg = setup(args)
