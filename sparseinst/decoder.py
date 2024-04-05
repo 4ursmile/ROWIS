@@ -375,8 +375,8 @@ class GroupInstanceBranch(nn.Module):
         #     init.constant_(module.bias, bias_value)
         for m in self.cls_score.modules():
             if isinstance(m, nn.Linear):
-                init.normal_(m, std=0.01)
-                init.constant_(m, bias_value)
+                init.normal_(m.weight, std=0.01)
+                init.constant_(m.bias, bias_value)
         for m in self.mask_kernel.modules():
             if isinstance(m, nn.Linear):
                 init.normal_(m.weight, std=0.01)
