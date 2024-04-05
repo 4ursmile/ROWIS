@@ -347,19 +347,17 @@ class GroupInstanceBranch(nn.Module):
 
         self.iam_conv = nn.Conv2d(
             dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
-        self.fc = nn.Linear(expand_dim, dim)
+        self.fc = nn.Linear(expand_dim, expand_dim)
         self.cls_score = nn.Sequential(
-            nn.Linear(dim, dim),
-            nn.ReLU(),
             nn.Linear(dim, self.num_classes)
         )
         self.mask_kernel = nn.Sequential(
-            nn.Linear(dim, dim),
+            nn.Linear(expand_dim, dim),
             nn.ReLU(),
             nn.Linear(dim, kernel_dim)
         )
         self.objectness = nn.Sequential(
-            nn.Linear(dim, dim),
+            nn.Linear(expand_dim, dim),
             nn.ReLU(),
             nn.Linear(dim, 1)
         )
