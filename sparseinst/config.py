@@ -51,7 +51,7 @@ def add_sparse_inst_config(cfg):
     cfg.MODEL.SPARSE_INST.LOSS.MASK_PIXEL_WEIGHT = 5.0
     cfg.MODEL.SPARSE_INST.LOSS.MASK_DICE_WEIGHT = 2.0
     # iou-aware objectness loss weight
-    cfg.MODEL.SPARSE_INST.LOSS.OBJECTNESS_WEIGHT = 1.0
+    cfg.MODEL.SPARSE_INST.LOSS.OBJECTNESS_WEIGHT = 1.7
     cfg.MODEL.SPARSE_INST.LOSS.PROB_WEIGHT = 0.8
     # [Matcher]
     cfg.MODEL.SPARSE_INST.MATCHER = CN()

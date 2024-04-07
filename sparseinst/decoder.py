@@ -18,14 +18,17 @@ from torch import tensor
 
 class SelfAttention(nn.Module):
     "Self attention layer for `n_channels`."
-    def __init__(self, n_channels):
+    def __init__(self, n_channels, down_factor=8):
         super(SelfAttention, self).__init__()
-        self.query,self.key,self.value = [self._conv(n_channels, c) for c in (n_channels//8,n_channels//8,n_channels)]
+        self.query,self.key,self.value = [self._conv(n_channels, c) for c in (n_channels//down_factor,n_channels//down_factor,n_channels)]
         self.gamma = nn.Parameter(tensor([0.]))
 
     def _conv(self,n_in,n_out):
         return nn.Conv2d(n_in, n_out, kernel_size=1, bias=False)
-
+    def init_weights(self):
+        self.query.apply(c2_msra_fill)
+        self.key.apply(c2_msra_fill)
+        self.value.apply(c2_msra_fill)
     def forward(self, x):
         #Notation from the paper.
         size = x.size()
@@ -35,7 +38,25 @@ class SelfAttention(nn.Module):
         beta = F.softmax(torch.einsum('xyzw,xzlw->xylw' ,torch.transpose(g, 1, 2), f), dim=1)
         o = self.gamma * torch.einsum('xyzw,xzlw->xylw', h, beta) + x
         return o.view(*size).contiguous()
-
+class AttentionCNN(nn.Module):
+    def __init__(self, in_channels, out_channels, down_factor=4, use_cnn = True, use_batchnorm=True):
+        super(AttentionCNN, self).__init__()
+        module_list = [SelfAttention(in_channels, down_factor)]
+        if use_cnn:
+            module_list.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
+        if use_batchnorm:
+            module_list.append(nn.BatchNorm2d(out_channels))
+        self.modules = nn.Sequential(*module_list)
+        self.relu = nn.ReLU()
+    def init_weights(self):
+        for m in self.modules.modules():
+            if isinstance(m, nn.Conv2d):
+                c2_msra_fill(m)
+            elif isinstance(m, SelfAttention):
+                m.init_weights()
+    def forward(self, x):
+        out = self.modules(x)
+        return out
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
@@ -43,15 +64,13 @@ SPARSE_INST_DECODER_REGISTRY = Registry("SPARSE_INST_DECODER")
 SPARSE_INST_DECODER_REGISTRY.__doc__ = "registry for SparseInst decoder"
 
 
-def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
+def _make_stack_3x3_convs(num_convs, in_channels, out_channels, base_down_facter=2, down_factor_scale=2):
     convs = []
-    for _ in range(num_convs):
-        convs.append(
-            Conv2d(in_channels, out_channels, 3, padding=1))
-        convs.append(nn.ReLU(True))
+    for i in range(num_convs):
+        convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter*(down_factor_scale**i)))
         in_channels = out_channels
-    convs.append(SelfAttention(out_channels))
     return nn.Sequential(*convs)
+
 
 class InstanceDeformableConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
@@ -352,21 +371,18 @@ class GroupInstanceBranch(nn.Module):
             nn.Linear(expand_dim, self.num_classes)
         )
         self.mask_kernel = nn.Sequential(
-            nn.Linear(expand_dim, dim),
-            nn.ReLU(),
-            nn.Linear(dim, kernel_dim)
+            nn.Linear(expand_dim, kernel_dim)
         )
         self.objectness = nn.Sequential(
-            nn.Linear(expand_dim, dim),
-            nn.ReLU(),
-            nn.Linear(dim, 1)
+            nn.Linear(expand_dim, 1)
         )
         self.prior_prob = 0.01
         self._init_weights()
 
     def _init_weights(self):
-        if isinstance(self.inst_convs, InstanceDeformableConv):
-            self.inst_convs.init_weights()
+        for m in self.inst_convs.modules():
+            if isinstance(m, AttentionCNN):
+                m.init_weights()
         bias_value = -math.log((1 - self.prior_prob) / self.prior_prob)
         c2_msra_fill(self.iam_conv)
         # for module in [self.iam_conv, self.cls_score]:
