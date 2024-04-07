@@ -67,9 +67,9 @@ SPARSE_INST_DECODER_REGISTRY.__doc__ = "registry for SparseInst decoder"
 def _make_stack_3x3_convs(num_convs, in_channels, out_channels, base_down_facter=2):
     convs = []
     for i in range(num_convs-1):
-        convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter*(i+1)))
+        convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter**(i+1)))
         in_channels = out_channels
-    convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter*(num_convs), use_batchnorm=False))
+    convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter**num_convs, use_batchnorm=False))
     return nn.Sequential(*convs)
 
 
