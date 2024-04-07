@@ -55,7 +55,7 @@ class AttentionCNN(nn.Module):
             elif isinstance(m, SelfAttention):
                 m.init_weights()
     def forward(self, x):
-        out = self.modules(x)
+        out = self.seq_modules(x)
         return out
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
@@ -64,11 +64,12 @@ SPARSE_INST_DECODER_REGISTRY = Registry("SPARSE_INST_DECODER")
 SPARSE_INST_DECODER_REGISTRY.__doc__ = "registry for SparseInst decoder"
 
 
-def _make_stack_3x3_convs(num_convs, in_channels, out_channels, base_down_facter=2, down_factor_scale=2):
+def _make_stack_3x3_convs(num_convs, in_channels, out_channels, base_down_facter=2):
     convs = []
-    for i in range(num_convs):
-        convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter*(down_factor_scale**i)))
+    for i in range(num_convs-1):
+        convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter*(i+1)))
         in_channels = out_channels
+    convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter*(num_convs), use_batchnorm=False))
     return nn.Sequential(*convs)
 
 
