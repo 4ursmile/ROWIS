@@ -47,9 +47,9 @@ class AttentionCNN(nn.Module):
         if use_batchnorm:
             module_list.append(nn.BatchNorm2d(out_channels))
         module_list.append(nn.ReLU(True))
-        self.modules = nn.Sequential(*module_list)
+        self.seq_modules = nn.Sequential(*module_list)
     def init_weights(self):
-        for m in self.modules:
+        for m in self.seq_modules.modules():
             if isinstance(m, nn.Conv2d):
                 c2_msra_fill(m)
             elif isinstance(m, SelfAttention):
