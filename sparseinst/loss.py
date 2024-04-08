@@ -152,8 +152,12 @@ class SparseInstCriterion(nn.Module):
         with torch.no_grad():
             ious = compute_mask_iou(src_masks, target_masks)
 
-        tgt_iou_scores = ious
-        src_iou_scores = src_iou_scores[src_idx]
+        # tgt_iou_scores = ious
+        # src_iou_scores = src_iou_scores[src_idx]
+        # tgt_iou_scores = tgt_iou_scores.flatten(0)
+        # src_iou_scores = src_iou_scores.flatten(0)
+        tgt_iou_scores = torch.zeros(src_iou_scores.shape)
+        tgt_iou_scores[src_idx] = ious
         tgt_iou_scores = tgt_iou_scores.flatten(0)
         src_iou_scores = src_iou_scores.flatten(0)
 
