@@ -156,11 +156,10 @@ class SparseInstCriterion(nn.Module):
         # src_iou_scores = src_iou_scores[src_idx]
         # tgt_iou_scores = tgt_iou_scores.flatten(0)
         # src_iou_scores = src_iou_scores.flatten(0)
+        src_iou_scores = src_iou_scores.flatten(0)
         tgt_iou_scores = torch.zeros(src_iou_scores.shape)
         tgt_iou_scores[src_idx] = ious
         tgt_iou_scores = tgt_iou_scores.flatten(0)
-        src_iou_scores = src_iou_scores.flatten(0)
-
         losses = {
             "loss_objectness": F.binary_cross_entropy_with_logits(src_iou_scores, tgt_iou_scores, reduction='mean'),
             "loss_dice": dice_loss(src_masks, target_masks) / num_instances,
