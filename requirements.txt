@@ -1,0 +1,4 @@
+timm
+scipy
+opencv-python
+shapely
