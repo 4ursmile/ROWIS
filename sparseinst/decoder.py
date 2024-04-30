@@ -374,14 +374,10 @@ class GroupInstanceBranch(nn.Module):
             nn.Linear(expand_dim, self.num_classes)
         )
         self.mask_kernel = nn.Sequential(
-            nn.Linear(expand_dim, dim),
-            nn.ReLU(True),
-            nn.Linear(dim, kernel_dim)
+            nn.Linear(expand_dim, kernel_dim),
         )
         self.objectness = nn.Sequential(
-            nn.Linear(expand_dim, dim),
-            nn.ReLU(True),
-            nn.Linear(dim, 1)
+            nn.Linear(expand_dim, 1),
         )
         self.prior_prob = 0.01
         self._init_weights()
