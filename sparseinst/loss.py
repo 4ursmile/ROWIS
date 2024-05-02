@@ -156,7 +156,7 @@ class SparseInstCriterion(nn.Module):
         # src_iou_scores = src_iou_scores[src_idx]
         # tgt_iou_scores = tgt_iou_scores.flatten(0)
         # src_iou_scores = src_iou_scores.flatten(0)
-        tgt_iou_scores = torch.zeros(src_iou_scores.shape, dtype=src_iou_scores.dtype).to(src_iou_scores)
+        tgt_iou_scores = torch.zeros(src_iou_scores.shape, dtype=src_iou_scores.dtype).to(ious)
         tgt_iou_scores[src_idx] = ious.view(-1, 1)
         tgt_iou_scores = tgt_iou_scores.flatten(0)
         src_iou_scores = src_iou_scores.flatten(0)
