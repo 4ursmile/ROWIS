@@ -365,8 +365,8 @@ class GroupInstanceBranch(nn.Module):
         kernel_dim = cfg.MODEL.SPARSE_INST.DECODER.KERNEL_DIM
         self.num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
-        use_pyramid = cfg.MODEL.SPARSE_INST.DECODER.USE_PYRAMID
-        base_down_factor = cfg.MODEL.SPARSE_INST.DECODER.BASE_DOWN_FACTOR
+        use_pyramid = cfg.MODEL.OWIS.USE_PYRAMID
+        base_down_factor = cfg.MODEL.OWIS.BASE_DOWN_FACTOR
         self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim) if not use_pyramid else _make_stack_attention_convs(num_convs, in_channels, dim, base_down_factor)
         #self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
         if self.num_groups < 2: 

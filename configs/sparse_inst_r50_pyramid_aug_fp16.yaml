@@ -3,10 +3,10 @@ MODEL:
   WEIGHTS: "pretrained_models/R-50.pkl"
   OWIS:
     HIDDEN_DIM: 256
+    USE_PYRAMID: True
+    BASE_DOWN_FACTOR: 2
   SPARSE_INST:
     DECODER:
-      USE_PYRAMID: True
-      BASE_DOWN_FACTOR: 2
       NAME: "GroupIAMSoftDecoder"
 INPUT:
   CROP:
@@ -17,4 +17,4 @@ INPUT:
 SOLVER:
   AMP:
     ENABLED: True
-OUTPUT_DIR: "output/sparse_inst_r50_aug"
+OUTPUT_DIR: "output/sparse_inst_r50_pyramid_aug_fp16"
