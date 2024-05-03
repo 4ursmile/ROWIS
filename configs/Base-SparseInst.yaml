@@ -16,6 +16,8 @@ MODEL:
       NAME: "InstanceContextEncoder"
     DECODER:
       NAME: "GroupIAMDecoder"
+      USE_PYRAMID: False
+      BASE_DOWN_FACTOR: 2
   OWIS:
     PREV_INTRODUCED_CLS: 0
     CUR_INTRODUCED_CLS: 80
@@ -25,7 +27,7 @@ DATASETS:
   TRAIN: ("coco_2017_train",)
   TEST:  ("coco_2017_val",)
 SOLVER:
-  IMS_PER_BATCH: 32
+  IMS_PER_BATCH: 64
   BASE_LR: 0.00005
   STEPS: (150000, 230000)
   MAX_ITER: 270000
