@@ -73,7 +73,13 @@ def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
         in_channels = out_channels
     convs.append(SelfAttention(out_channels, 8))
     return nn.Sequential(*convs)
-
+def _make_stack_attention_convs(num_convs, in_channels, out_channels, base_down_facter=2):
+    convs = []
+    for i in range(num_convs-1):
+        convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter*int(math.pow(2, i+1))))
+        in_channels = out_channels
+    convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter**num_convs, use_batchnorm=False))
+    return nn.Sequential(*convs)     
 
 class InstanceDeformableConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
@@ -359,8 +365,9 @@ class GroupInstanceBranch(nn.Module):
         kernel_dim = cfg.MODEL.SPARSE_INST.DECODER.KERNEL_DIM
         self.num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
-
-        self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim)
+        use_pyramid = cfg.MODEL.OWIS.USE_PYRAMID
+        base_down_factor = cfg.MODEL.OWIS.BASE_DOWN_FACTOR
+        self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim) if not use_pyramid else _make_stack_attention_convs(num_convs, in_channels, dim, base_down_factor)
         #self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
         if self.num_groups < 2: 
             self.num_groups = 2
@@ -374,14 +381,10 @@ class GroupInstanceBranch(nn.Module):
             nn.Linear(expand_dim, self.num_classes)
         )
         self.mask_kernel = nn.Sequential(
-            nn.Linear(expand_dim, dim),
-            nn.ReLU(True),
-            nn.Linear(dim, kernel_dim)
+            nn.Linear(expand_dim, kernel_dim),
         )
         self.objectness = nn.Sequential(
-            nn.Linear(expand_dim, dim),
-            nn.ReLU(True),
-            nn.Linear(dim, 1)
+            nn.Linear(expand_dim, 1),
         )
         self.prior_prob = 0.01
         self._init_weights()
