@@ -10,7 +10,7 @@ def add_sparse_inst_config(cfg):
     cfg.MODEL.SPARSE_INST = CN()
 
     # parameters for inference
-    cfg.MODEL.SPARSE_INST.CLS_THRESHOLD = 0.005
+    cfg.MODEL.SPARSE_INST.CLS_THRESHOLD = 0.0001
     cfg.MODEL.SPARSE_INST.MASK_THRESHOLD = 0.45
     cfg.MODEL.SPARSE_INST.MAX_DETECTIONS = 100
 
