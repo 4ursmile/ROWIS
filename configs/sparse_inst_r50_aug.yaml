@@ -3,8 +3,6 @@ MODEL:
   WEIGHTS: "pretrained_models/R-50.pkl"
   OWIS:
     HIDDEN_DIM: 256
-SOLVER:
-  IMS_PER_BATCH: 32
 INPUT:
   CROP:
     ENABLED: True
