@@ -3,9 +3,11 @@
 import math
 import torch
 import torch.nn as nn
+from torch import Tensor
 from torch.nn import init
 import torch.nn.functional as F
 
+from typing import Type, Tuple
 from fvcore.nn.weight_init import c2_msra_fill, c2_xavier_fill
 
 from detectron2.utils.registry import Registry
@@ -16,12 +18,97 @@ from .dcn import DeformableConv2d
 import copy
 from torch import tensor
 
+# Lightly adapted from
+# https://github.com/facebookresearch/MaskFormer/blob/main/mask_former/modeling/transformer/transformer_predictor.py # noqa
+class MLP(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_layers: int,
+        sigmoid_output: bool = False,
+    ) -> None:
+        super().__init__()
+        self.num_layers = num_layers
+        h = [hidden_dim] * (num_layers - 1)
+        self.layers = nn.ModuleList(
+            nn.Linear(n, k) for n, k in zip([input_dim] + h, h + [output_dim])
+        )
+        self.sigmoid_output = sigmoid_output
+    def init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                c2_msra_fill(m)
+    def forward(self, x):
+        for i, layer in enumerate(self.layers):
+            x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
+        if self.sigmoid_output:
+            x = F.sigmoid(x)
+        return x
+class Attention(nn.Module):
+    """
+    An attention layer that allows for downscaling the size of the embedding
+    after projection to queries, keys, and values.
+    """
+
+    def __init__(
+        self,
+        embedding_dim: int,
+        num_heads: int,
+        downsample_rate: int = 1,
+    ) -> None:
+        super().__init__()
+        self.embedding_dim = embedding_dim
+        self.internal_dim = embedding_dim // downsample_rate
+        self.num_heads = num_heads
+        assert self.internal_dim % num_heads == 0, "num_heads must divide embedding_dim."
+
+        self.q_proj = nn.Linear(embedding_dim, self.internal_dim)
+        self.k_proj = nn.Linear(embedding_dim, self.internal_dim)
+        self.v_proj = nn.Linear(embedding_dim, self.internal_dim)
+        self.out_proj = nn.Linear(self.internal_dim, embedding_dim)
+
+    def _separate_heads(self, x: Tensor, num_heads: int) -> Tensor:
+        b, n, c = x.shape
+        x = x.reshape(b, n, num_heads, c // num_heads)
+        return x.transpose(1, 2)  # B x N_heads x N_tokens x C_per_head
+
+    def _recombine_heads(self, x: Tensor) -> Tensor:
+        b, n_heads, n_tokens, c_per_head = x.shape
+        x = x.transpose(1, 2)
+        return x.reshape(b, n_tokens, n_heads * c_per_head)  # B x N_tokens x C
+
+    def forward(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
+        # Input projections
+        q = self.q_proj(q)
+        k = self.k_proj(k)
+        v = self.v_proj(v)
+
+        # Separate into heads
+        q = self._separate_heads(q, self.num_heads)
+        k = self._separate_heads(k, self.num_heads)
+        v = self._separate_heads(v, self.num_heads)
+
+        # Attention
+        _, _, _, c_per_head = q.shape
+        attn = q @ k.permute(0, 1, 3, 2)  # B x N_heads x N_tokens x N_tokens
+        attn = attn / math.sqrt(c_per_head)
+        attn = torch.softmax(attn, dim=-1)
+
+        # Get output
+        out = attn @ v
+        out = self._recombine_heads(out)
+        out = self.out_proj(out)
+
+        return out
 class SelfAttention(nn.Module):
     "Self attention layer for `n_channels`."
     def __init__(self, n_channels, down_factor=8):
         super(SelfAttention, self).__init__()
-        self.query,self.key,self.value = [self._conv(n_channels, c) for c in (n_channels//down_factor,n_channels//down_factor,n_channels)]
+        self.query,self.key,self.value = [nn.Linear(n_channels, c) for c in (n_channels//down_factor,n_channels//down_factor,n_channels)]
         self.gamma = nn.Parameter(tensor([0.]))
+        self.out_proj = nn.Linear(n_channels, n_channels)
         self.softmax = nn.Softmax2d()
     def _conv(self,n_in,n_out):
         return nn.Conv2d(n_in, n_out, kernel_size=1, bias=False)
@@ -37,6 +124,7 @@ class SelfAttention(nn.Module):
         
         beta = self.softmax(torch.einsum('xyzw,xzlw->xylw' ,torch.transpose(g, 1, 2), f))
         o = self.gamma * torch.einsum('xyzw,xzlw->xylw', h, beta) + x
+        o = self.out_proj(o.view(*size))
         return o.view(*size).contiguous()
 class AttentionCNN(nn.Module):
     def __init__(self, in_channels, out_channels, down_factor=4, use_cnn = True, use_batchnorm=True):
@@ -64,7 +152,7 @@ SPARSE_INST_DECODER_REGISTRY = Registry("SPARSE_INST_DECODER")
 SPARSE_INST_DECODER_REGISTRY.__doc__ = "registry for SparseInst decoder"
 
 
-def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
+def _make_stack_3x3_convs_mask(num_convs, in_channels, out_channels):
     convs = []
     for _ in range(num_convs):
         convs.append(
@@ -73,6 +161,14 @@ def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
         in_channels = out_channels
     convs.append(SelfAttention(out_channels, 8))
     return nn.Sequential(*convs)
+def _make_stack_3x3_convs(num_convs, in_channels, out_channels):
+    convs = []
+    for _ in range(num_convs):
+        convs.append(
+            Conv2d(in_channels, out_channels, 3, padding=1))
+        convs.append(nn.ReLU(True))
+        in_channels = out_channels
+    return nn.Sequential(*convs)
 def _make_stack_attention_convs(num_convs, in_channels, out_channels, base_down_facter=2):
     convs = []
     for i in range(num_convs-1):
@@ -80,130 +176,6 @@ def _make_stack_attention_convs(num_convs, in_channels, out_channels, base_down_
         in_channels = out_channels
     convs.append(AttentionCNN(in_channels, out_channels, down_factor=base_down_facter**num_convs, use_batchnorm=False))
     return nn.Sequential(*convs)     
-
-class InstanceDeformableConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
-        super(InstanceDeformableConvBlock, self).__init__()
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(True)
-        ).to(device=self.device)
-        self.conv2 = nn.Sequential(
-            DeformableConv2d(out_channels, out_channels, kernel_size=kernel_size, stride=stride),
-            nn.BatchNorm2d(out_channels)
-        ).to(device=self.device)
-        self.downsample = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
-            nn.BatchNorm2d(out_channels),
-        ).to(device=self.device)
-        self.relu = nn.ReLU()
-        self.out_channels = out_channels
-
-    def forward(self, x):
-        residual = x
-        out = self.conv1(x)
-        out = self.conv2(out)
-        residual = self.downsample(x)
-        out += residual
-        out = self.relu(out)
-        return out
-class InstanceDeformableConv(nn.Module):
-    def __init__(self, num_blocks, in_channels, out_channels, kernel_size=3, stride = 1):
-        super(InstanceDeformableConv, self).__init__()
-        layers = []
-
-        for _ in range(0, num_blocks):
-            layers.append(InstanceDeformableConvBlock(in_channels, out_channels, kernel_size, stride))
-            layers.append(nn.MaxPool2d(kernel_size=2, stride=1, padding=1))
-            in_channels = out_channels
-        self.layers = nn.Sequential(*layers).to('cuda' if torch.cuda.is_available() else 'cpu')
-    def init_weights(self):
-        for m in self.modules():
-            if isinstance(m, DeformableConv2d):
-                m.init_weights()
-            else: 
-                for m in m.modules():
-                    if isinstance(m, nn.Conv2d):
-                        c2_msra_fill(m)
-    def forward(self, x):
-        return self.layers(x)
-class DeformableIAMSingle(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
-        super(DeformableIAMSingle, self).__init__()
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU()
-        ).to(device=self.device)
-    def init_weights(self, value):
-        for m in self.conv.modules():
-            if isinstance(m, nn.Conv2d):
-                init.constant_(m.bias, value).to(self.device)
-                init.normal_(m.weight, std=0.1).to(self.device)
-    def forward(self, x):
-        out = self.conv(x)
-        return out
-class DeformableIAMDouble(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1):
-        super(DeformableIAMDouble, self).__init__()
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(True)
-        ).to(device=self.device)
-        self.conv2 = nn.Sequential(
-            DeformableConv2d(out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1),
-            nn.BatchNorm2d(out_channels),
-        ).to(device=self.device)
-        self.downsample = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0),
-            nn.BatchNorm2d(out_channels),
-        ).to(device=self.device)
-        self.relu = nn.ReLU()
-    def init_weights(self, value):
-        for m in self.conv.modules():
-            if isinstance(m, nn.Conv2d):
-                init.constant_(m.bias, value)
-                init.normal_(m.weight, std=0.1)
-            elif isinstance(m, DeformableConv2d):
-                m.init_weights()
-        for m in self.conv2.modules():
-            if isinstance(m, nn.Conv2d):
-                c2_msra_fill(m)
-            elif isinstance(m, DeformableConv2d):
-                m.init_weights()
-        for m in self.downsample.modules():
-            if isinstance(m, nn.Conv2d):
-                c2_msra_fill(m)
-        self.downsample.to(self.device)
-        self.conv.to(self.device)
-    def forward(self, x, residual):
-        residual = x 
-        out = self.conv(x)
-        out = self.conv2(out)
-        residual = self.downsample(residual)
-        out += residual
-        out = self.relu(out)
-        return out
-
-class DeformableIAM(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride = 1, result_imtermidiate = False):
-        super(DeformableIAM, self).__init__()
-        self.start_layer = DeformableIAMSingle(in_channels, out_channels, kernel_size, stride)
-
-        self.end_layer = DeformableIAMDouble(out_channels, out_channels, kernel_size, stride)
-        self.result_imtermidiate = result_imtermidiate
-    def init_weights(self, value):
-        self.start_layer.init_weights(value)
-        self.end_layer.init_weights(value)
-    def forward(self, x):
-        out= self.start_layer(x)
-        out= self.end_layer(out, x)
-        return out
         
 class InstanceBranch(nn.Module):
 
@@ -216,8 +188,7 @@ class InstanceBranch(nn.Module):
         kernel_dim = cfg.MODEL.SPARSE_INST.DECODER.KERNEL_DIM
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
 
-        #self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim)
-        self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
+        self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim)
         # iam prediction, a simple conv
         self.iam_conv = nn.Conv2d(dim, num_masks, 3, padding=1)
 
@@ -272,7 +243,7 @@ class MaskBranch(nn.Module):
         dim = cfg.MODEL.SPARSE_INST.DECODER.MASK.DIM
         num_convs = cfg.MODEL.SPARSE_INST.DECODER.MASK.CONVS
         kernel_dim = cfg.MODEL.SPARSE_INST.DECODER.KERNEL_DIM
-        self.mask_convs = _make_stack_3x3_convs(num_convs, in_channels, dim)
+        self.mask_convs = _make_stack_3x3_convs_mask(num_convs, in_channels, dim)
         self.projection = nn.Conv2d(dim, kernel_dim, kernel_size=1)
         self._init_weights()
 
@@ -282,7 +253,7 @@ class MaskBranch(nn.Module):
                 c2_msra_fill(m)
         c2_msra_fill(self.projection)
 
-    def forward(self, features):
+    def forward(self, features, kernal):
         # mask features (x4 convs)
         features = self.mask_convs(features)
         return self.projection(features)
@@ -365,9 +336,10 @@ class GroupInstanceBranch(nn.Module):
         kernel_dim = cfg.MODEL.SPARSE_INST.DECODER.KERNEL_DIM
         self.num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
-        use_pyramid = cfg.MODEL.OWIS.USE_PYRAMID
         base_down_factor = cfg.MODEL.OWIS.BASE_DOWN_FACTOR
-        self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim) if not use_pyramid else _make_stack_attention_convs(num_convs, in_channels, dim, base_down_factor)
+        objectness_depth = cfg.MODEL.OWIS.OBJECTNESS_DEPTH
+        objectness_hidden_dim = cfg.MODEL.OWIS.OBJECTNESS_HIDDEN_DIM
+        self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim) 
         #self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
         if self.num_groups < 2: 
             self.num_groups = 2
@@ -377,15 +349,12 @@ class GroupInstanceBranch(nn.Module):
         self.iam_conv = nn.Conv2d(
             dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
         self.fc = nn.Linear(expand_dim, expand_dim)
-        self.cls_score = nn.Sequential(
-            nn.Linear(expand_dim, self.num_classes)
-        )
-        self.mask_kernel = nn.Sequential(
-            nn.Linear(expand_dim, kernel_dim),
-        )
-        self.objectness = nn.Sequential(
-            nn.Linear(expand_dim, 1),
-        )
+        self.cls_score = MLP(
+            expand_dim, objectness_hidden_dim, self.num_classes, objectness_depth-1, sigmoid_output=True)
+        self.mask_kernel = MLP(
+            expand_dim, objectness_hidden_dim, kernel_dim, objectness_depth-1, sigmoid_output=True)
+        self.objectness = MLP(
+            expand_dim, objectness_hidden_dim, 1, objectness_depth, sigmoid_output=True)
         self.prior_prob = 0.01
         self._init_weights()
 
@@ -397,24 +366,12 @@ class GroupInstanceBranch(nn.Module):
                 c2_msra_fill(m)
             elif isinstance(m, SelfAttention):
                 m.init_weights()
-        bias_value = -math.log((1 - self.prior_prob) / self.prior_prob)
         c2_msra_fill(self.iam_conv)
         # for module in [self.iam_conv, self.cls_score]:
         #     init.constant_(module.bias, bias_value)
-        for m in self.cls_score.modules():
-            if isinstance(m, nn.Linear):
-                init.normal_(m.weight, std=0.01)
-                init.constant_(m.bias, bias_value)
-        for m in self.mask_kernel.modules():
-            if isinstance(m, nn.Linear):
-                init.normal_(m.weight, std=0.01)
-                init.constant_(m.bias, 0.0)
-        if isinstance(self.fc, nn.Linear):
-                c2_xavier_fill(self.fc)
-        for m in self.objectness.modules():
-            if isinstance(m, nn.Linear):
-                init.normal_(m.weight, std=0.01)
-                init.constant_(m.bias, 0.0)
+        self.cls_score.init_weights()
+        self.mask_kernel.init_weights()
+        self.objectness.init_weights()
 
     def forward(self, features):
             # instance features (x4 convs)
