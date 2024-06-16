@@ -351,11 +351,11 @@ class GroupInstanceBranch(nn.Module):
             dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
         self.fc = nn.Linear(expand_dim, expand_dim)
         self.cls_score = MLP(
-            expand_dim, objectness_hidden_dim, self.num_classes, objectness_depth-1, sigmoid_output=True)
+            expand_dim, objectness_hidden_dim, self.num_classes, objectness_depth-1, sigmoid_output=False)
         self.mask_kernel = MLP(
-            expand_dim, objectness_hidden_dim, kernel_dim, objectness_depth-1, sigmoid_output=True)
+            expand_dim, objectness_hidden_dim, kernel_dim, objectness_depth-1, sigmoid_output=False)
         self.objectness = MLP(
-            expand_dim, objectness_hidden_dim, 1, objectness_depth, sigmoid_output=True)
+            expand_dim, objectness_hidden_dim, 1, objectness_depth, sigmoid_output=False)
         self.prior_prob = 0.01
         self._init_weights()
 
