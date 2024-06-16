@@ -337,8 +337,8 @@ class GroupInstanceBranch(nn.Module):
         self.num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
         base_down_factor = cfg.MODEL.OWIS.BASE_DOWN_FACTOR
-        objectness_depth = cfg.MODEL.OWIS.OBJECTNESS_DEPTH
-        objectness_hidden_dim = cfg.MODEL.OWIS.OBJECTNESS_HIDDEN_DIM
+        objectness_depth = cfg.MODEL.OWIS.OBJECTNESS_HEAD_DEPTH
+        objectness_hidden_dim = cfg.MODEL.OWIS.OBJECTNESS_HEAD_HIDDEN_DIM
         self.inst_convs = _make_stack_3x3_convs(num_convs, in_channels, dim) 
         #self.inst_convs = InstanceDeformableConv(num_convs, in_channels, dim)
         if self.num_groups < 2: 
