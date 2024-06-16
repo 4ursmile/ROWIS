@@ -106,9 +106,9 @@ class SelfAttention(nn.Module):
     "Self attention layer for `n_channels`."
     def __init__(self, n_channels, down_factor=8):
         super(SelfAttention, self).__init__()
-        self.query,self.key,self.value = [nn.Linear(n_channels, c) for c in (n_channels//down_factor,n_channels//down_factor,n_channels)]
+        self.query,self.key,self.value = [self._conv(n_channels, c) for c in (n_channels//down_factor,n_channels//down_factor,n_channels)]
         self.gamma = nn.Parameter(tensor([0.]))
-        self.out_proj = nn.Linear(n_channels, n_channels)
+        self.out_proj = nn.Conv2d(n_channels, n_channels, kernel_size=1)
         self.softmax = nn.Softmax2d()
     def _conv(self,n_in,n_out):
         return nn.Conv2d(n_in, n_out, kernel_size=1, bias=False)
@@ -116,6 +116,7 @@ class SelfAttention(nn.Module):
         self.query.apply(c2_msra_fill)
         self.key.apply(c2_msra_fill)
         self.value.apply(c2_msra_fill)
+        self.out_proj.apply(c2_msra_fill)
     def forward(self, x):
         #Notation from the paper.
         size = x.size()
