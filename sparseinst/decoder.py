@@ -109,6 +109,7 @@ class SelfAttention(nn.Module):
         self.query,self.key,self.value = [self._conv(n_channels, c) for c in (n_channels//down_factor,n_channels//down_factor,n_channels)]
         self.gamma = nn.Parameter(tensor([0.]))
         self.out_proj = nn.Conv2d(n_channels, n_channels, kernel_size=1)
+        self.proj_act = nn.ReLU(True)
         self.softmax = nn.Softmax2d()
     def _conv(self,n_in,n_out):
         return nn.Conv2d(n_in, n_out, kernel_size=1, bias=False)
@@ -126,6 +127,7 @@ class SelfAttention(nn.Module):
         beta = self.softmax(torch.einsum('xyzw,xzlw->xylw' ,torch.transpose(g, 1, 2), f))
         o = self.gamma * torch.einsum('xyzw,xzlw->xylw', h, beta) + x
         o = self.out_proj(o.view(*size))
+        o = self.proj_act(o)
         return o.view(*size).contiguous()
 class AttentionCNN(nn.Module):
     def __init__(self, in_channels, out_channels, down_factor=4, use_cnn = True, use_batchnorm=True):
