@@ -253,7 +253,7 @@ class MaskBranch(nn.Module):
                 c2_msra_fill(m)
         c2_msra_fill(self.projection)
 
-    def forward(self, features, kernal):
+    def forward(self, features):
         # mask features (x4 convs)
         features = self.mask_convs(features)
         return self.projection(features)
