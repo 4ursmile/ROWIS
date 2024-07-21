@@ -239,12 +239,30 @@ def parameter_count_table(model: nn.Module, max_depth: int = 3) -> str:
 
 def main(args):
     os.system("nvidia-smi")
-    base_path = '/kaggle/input/coco-2017-dataset/coco2017'
-    register_coco_instances("coco_train", {}, base_path+"/annotations/instances_train2017.json", base_path + "/train2017")
-    register_coco_instances("coco_val", {}, base_path + "/annotations/instances_val2017.json", base_path + "/val2017")
+    base_path_data = '/kaggle/input/coco-2017-dataset/coco2017'
+    base_path_json = './datasets/OWIS'
+    
 
 
     cfg = setup(args)
+    register_coco_instances("coco_train", {}, base_path_json+"/annotations/instances_train2017.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val", {}, base_path_json + "/annotations/instances_val2017.json", base_path_data + "/val2017")
+    # OWIS
+    # T0
+    register_coco_instances("coco_train_T0", {}, base_path_json+"/annotations/T0_instances_train2017_split.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val_T0", {}, base_path_json + "/annotations/T0_instances_val2017_split.json", base_path_data + "/val2017")
+    # T1
+    register_coco_instances("coco_train_T1", {}, base_path_json+"/annotations/T1_instances_train2017_split.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val_T1", {}, base_path_json + "/annotations/T1_instances_val2017_split.json", base_path_data + "/val2017")
+    # T2
+    register_coco_instances("coco_train_T2", {}, base_path_json+"/annotations/T2_instances_train2017_split.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val_T2", {}, base_path_json + "/annotations/T2_instances_val2017_split.json", base_path_data + "/val2017")
+    # T3
+    register_coco_instances("coco_train_T3", {}, base_path_json+"/annotations/T3_instances_train2017_split.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val_T3", {}, base_path_json + "/annotations/T3_instances_val2017_split.json", base_path_data + "/val2017")
+    # T4
+    register_coco_instances("coco_train_T4", {}, base_path_json+"/annotations/T4_instances_train2017_split.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val_T4", {}, base_path_json + "/annotations/T4_instances_val2017_split.json", base_path_data + "/val2017")
     if args.eval_only:
         model = Trainer.build_model(cfg)
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(

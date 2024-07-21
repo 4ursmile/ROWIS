@@ -4,7 +4,10 @@ MODEL:
   OWIS:
     HIDDEN_DIM: 1024
     PREV_INTRODUCED_CLS: 0
-    CUR_INTRODUCED_CLS: 80
+    CUR_INTRODUCED_CLS: 1
+DATASETS:
+  TRAIN: ("coco_train_T0",)
+  TEST:  ("coco_val_T0",)
 INPUT:
   CROP:
     ENABLED: True
