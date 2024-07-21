@@ -6,7 +6,6 @@ inference_test_output
 
 
 *.png
-*.json
 *.diff
 
 # compilation and distribution
