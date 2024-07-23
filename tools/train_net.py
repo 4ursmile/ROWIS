@@ -240,7 +240,7 @@ def parameter_count_table(model: nn.Module, max_depth: int = 3) -> str:
 def main(args):
     os.system("nvidia-smi")
     base_path_data = '/kaggle/input/coco-2017-dataset/coco2017'
-    base_path_json = './datasets/OWIS'
+    base_path_json = './datasets_owis/OWIS'
     
 
 
