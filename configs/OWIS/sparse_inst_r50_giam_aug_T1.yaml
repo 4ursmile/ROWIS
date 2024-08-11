@@ -6,8 +6,8 @@ MODEL:
     PREV_INTRODUCED_CLS: 0
     CUR_INTRODUCED_CLS: 20
 DATASETS:
-  TRAIN: ("coco_train_T0",)
-  TEST:  ("coco_val_T0",)
+  TRAIN: ("coco_train_T1",)
+  TEST:  ("coco_val_T1",)
 INPUT:
   CROP:
     ENABLED: True
