@@ -6,6 +6,9 @@ import torch.nn.functional as F
 from torch.cuda.amp import autocast
 from scipy.optimize import linear_sum_assignment
 from fvcore.nn import sigmoid_focal_loss_jit
+import math
+import copy
+
 
 from detectron2.utils.registry import Registry
 
@@ -15,7 +18,20 @@ SPARSE_INST_MATCHER_REGISTRY = Registry("SPARSE_INST_MATCHER")
 SPARSE_INST_MATCHER_REGISTRY.__doc__ = "Matcher for SparseInst"
 SPARSE_INST_CRITERION_REGISTRY = Registry("SPARSE_INST_CRITERION")
 SPARSE_INST_CRITERION_REGISTRY.__doc__ = "Criterion for SparseInst"
+def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2, num_classes: int = 81, empty_weight: float = 0.1):
+    prob = inputs.sigmoid()
+    W = torch.ones(num_classes, dtype=prob.dtype, layout=prob.layout, device=prob.device)
+    W[-1] = empty_weight
+    ce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none", weight=W)
 
+    p_t = prob * targets + (1 - prob) * (1 - targets)
+    loss = ce_loss * ((1 - p_t) ** gamma)
+
+    if alpha >= 0:
+        alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
+        loss = alpha_t * loss
+
+    return loss.mean(1).sum() / num_boxes
 
 def compute_mask_iou(inputs, targets):
     inputs = inputs.sigmoid()
@@ -50,14 +66,15 @@ def dice_loss(inputs, targets, reduction='sum'):
 
 @SPARSE_INST_CRITERION_REGISTRY.register()
 class SparseInstCriterion(nn.Module):
-    # This part is partially derivated from: https://github.com/facebookresearch/detr/blob/main/models/detr.py
-
     def __init__(self, cfg, matcher):
         super().__init__()
         self.matcher = matcher
         self.losses = cfg.MODEL.SPARSE_INST.LOSS.ITEMS
         self.weight_dict = self.get_weight_dict(cfg)
-        self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
+        self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES + 1  # Add one class for unknown objects
+        self.empty_weight = cfg.MODEL.SPARSE_INST.LOSS.EMPTY_WEIGHT
+        self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
+        #self.min_obj = -hidden_dim * math.log(0.9)
 
     def get_weight_dict(self, cfg):
         losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness")
@@ -72,51 +89,42 @@ class SparseInstCriterion(nn.Module):
         return weight_dict
 
     def _get_src_permutation_idx(self, indices):
-        # permute predictions following indices
         batch_idx = torch.cat([torch.full_like(src, i)
                               for i, (src, _) in enumerate(indices)])
         src_idx = torch.cat([src for (src, _) in indices])
         return batch_idx, src_idx
 
     def _get_tgt_permutation_idx(self, indices):
-        # permute targets following indices
         batch_idx = torch.cat([torch.full_like(tgt, i)
                               for i, (_, tgt) in enumerate(indices)])
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def loss_labels(self, outputs, targets, indices, num_instances, input_shape=None):
+    def loss_labels(self, outputs, targets, indices, num_instances, log=True):
         assert "pred_logits" in outputs
-        src_logits = outputs['pred_logits']
-        idx = self._get_src_permutation_idx(indices)
-        target_classes_o = torch.cat([t["labels"][J]
-                                     for t, (_, J) in zip(targets, indices)])
-        target_classes = torch.full(src_logits.shape[:2], self.num_classes,
-                                    dtype=torch.int64, device=src_logits.device)
-        target_classes[idx] = target_classes_o
+        temp_src_logits = outputs['pred_logits'].clone()
+        temp_src_logits[:,:, self.invalid_cls_logits] = -10e10
+        src_logits = temp_src_logits
 
-        src_logits = src_logits.flatten(0, 1)
-        # prepare one_hot target.
-        target_classes = target_classes.flatten(0, 1)
-        pos_inds = torch.nonzero(
-            target_classes != self.num_classes, as_tuple=True)[0]
-        labels = torch.zeros_like(src_logits)
-        labels[pos_inds, target_classes[pos_inds]] = 1
-        # comp focal loss.
-        class_loss = sigmoid_focal_loss_jit(
-            src_logits,
-            labels,
-            alpha=0.25,
-            gamma=2.0,
-            reduction="sum",
-        ) / num_instances
-        losses = {'loss_ce': class_loss}
+        idx = self._get_src_permutation_idx(indices)
+        target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
+       
+        target_classes = torch.full(src_logits.shape[:2], self.num_classes - 1, dtype=torch.int64, device=src_logits.device)
+        target_classes[idx] = target_classes_o
+        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]],
+                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device)
+
+        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
+
+        loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_instances, alpha=0.25,
+                                     num_classes=self.num_classes, empty_weight=self.empty_weight) * src_logits.shape[1]
+
+        losses = {'loss_ce': loss_ce}
         return losses
 
     def loss_masks_with_iou_objectness(self, outputs, targets, indices, num_instances, input_shape):
         src_idx = self._get_src_permutation_idx(indices)
         tgt_idx = self._get_tgt_permutation_idx(indices)
-        # Bx100xHxW
         assert "pred_masks" in outputs
         assert "pred_scores" in outputs
         src_iou_scores = outputs["pred_scores"]
@@ -139,7 +147,6 @@ class SparseInstCriterion(nn.Module):
             target_masks[:, None], size=src_masks.shape[-2:], mode='bilinear', align_corners=False).squeeze(1)
 
         src_masks = src_masks.flatten(1)
-        # FIXME: tgt_idx
         mix_tgt_idx = torch.zeros_like(tgt_idx[1])
         cum_sum = 0
         for num_mask in num_masks:
@@ -152,10 +159,6 @@ class SparseInstCriterion(nn.Module):
         with torch.no_grad():
             ious = compute_mask_iou(src_masks, target_masks)
 
-        # tgt_iou_scores = ious
-        # src_iou_scores = src_iou_scores[src_idx]
-        # tgt_iou_scores = tgt_iou_scores.flatten(0)
-        # src_iou_scores = src_iou_scores.flatten(0)
         tgt_iou_scores = torch.zeros(src_iou_scores.shape, dtype=ious.dtype).to(src_iou_scores)
         tgt_iou_scores = tgt_iou_scores.to(ious)
         tgt_iou_scores[src_idx] = ious.view(-1, 1)
@@ -169,25 +172,28 @@ class SparseInstCriterion(nn.Module):
         }
         return losses
 
+    # def loss_obj_likelihood(self, outputs, targets, indices, num_boxes):
+    #     assert "pred_obj" in outputs
+    #     idx = self._get_src_permutation_idx(indices)
+    #     pred_obj = outputs["pred_obj"][idx]
+    #     return  {'loss_obj_ll': torch.clamp(pred_obj, min=self.min_obj).sum()/ num_boxes}
+
     def get_loss(self, loss, outputs, targets, indices, num_instances, **kwargs):
         loss_map = {
             "labels": self.loss_labels,
             "masks": self.loss_masks_with_iou_objectness,
+            # "obj_likelihood": self.loss_obj_likelihood,
         }
         if loss == "loss_objectness":
-            # NOTE: loss_objectness will be calculated in `loss_masks_with_iou_objectness`
             return {}
         assert loss in loss_map
         return loss_map[loss](outputs, targets, indices, num_instances, **kwargs)
 
     def forward(self, outputs, targets, input_shape):
-
         outputs_without_aux = {k: v for k,
                                v in outputs.items() if k != 'aux_outputs'}
 
-        # Retrieve the matching between the outputs of the last layer and the targets
         indices = self.matcher(outputs_without_aux, targets, input_shape)
-        # Compute the average number of target boxes accross all nodes, for normalization purposes
         num_instances = sum(len(t["labels"]) for t in targets)
         num_instances = torch.as_tensor(
             [num_instances], dtype=torch.float, device=next(iter(outputs.values())).device)
@@ -195,7 +201,7 @@ class SparseInstCriterion(nn.Module):
             torch.distributed.all_reduce(num_instances)
         num_instances = torch.clamp(
             num_instances / get_world_size(), min=1).item()
-        # Compute all the requested losses
+
         losses = {}
         for loss in self.losses:
             losses.update(self.get_loss(loss, outputs, targets, indices,
@@ -206,6 +212,7 @@ class SparseInstCriterion(nn.Module):
                 losses[k] *= self.weight_dict[k]
 
         return losses
+
 
 
 @SPARSE_INST_MATCHER_REGISTRY.register()
