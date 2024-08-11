@@ -117,7 +117,7 @@ class SparseInstCriterion(nn.Module):
         target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
 
         loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_instances, alpha=0.25,
-                                     num_classes=self.num_classes, empty_weight=self.empty_weight)
+                                     num_classes=self.num_classes, empty_weight=self.empty_weight) * src_logits.shape[1]
 
         losses = {'loss_ce': loss_ce}
         return losses
