@@ -100,7 +100,7 @@ class SparseInstCriterion(nn.Module):
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def loss_labels(self, outputs, targets, indices, num_instances, log=True):
+    def loss_labels(self, outputs, targets, indices, num_instances, input_shape=None):
         assert "pred_logits" in outputs
         temp_src_logits = outputs['pred_logits'].clone()
         temp_src_logits[:,:, self.invalid_cls_logits] = -10e10
