@@ -45,6 +45,6 @@ _darcs
 !/datasets/*.*
 /projects/*/datasets
 /models
-
+*.json
 # mac file
 .DS_Store
