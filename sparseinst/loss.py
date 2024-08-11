@@ -71,7 +71,7 @@ class SparseInstCriterion(nn.Module):
         self.matcher = matcher
         self.losses = cfg.MODEL.SPARSE_INST.LOSS.ITEMS
         self.weight_dict = self.get_weight_dict(cfg)
-        self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES + 1  # Add one class for unknown objects
+        self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES 
         self.empty_weight = cfg.MODEL.OWIS.EMPTY_WEIGHT
         self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
         #self.min_obj = -hidden_dim * math.log(0.9)
