@@ -13,6 +13,37 @@ from detectron2.engine import AutogradProfiler, DefaultTrainer, default_argument
 from detectron2.evaluation import COCOEvaluator, verify_results
 from detectron2.solver.build import maybe_add_gradient_clipping
 from detectron2.data.datasets import register_coco_instances
+from detectron2.evaluation import COCOEvaluator
+import numpy as np
+
+class COCOEvaluatorWithAR(COCOEvaluator):
+    def __init__(self, dataset_name, cfg, distributed, output_dir=None, *args, **kwargs):
+        super().__init__(dataset_name, cfg, distributed, output_dir, *args, **kwargs)
+
+    def _derive_coco_results(self, coco_eval, iou_type, class_names=None):
+        results = super()._derive_coco_results(coco_eval, iou_type, class_names)
+        
+        # Calculate AR
+        if coco_eval is not None:
+            recall = coco_eval.eval['recall']
+            if recall is not None:
+                ar_results = self._derive_ar_results(recall, class_names)
+                results.update(ar_results)
+                
+        return results
+
+    def _derive_ar_results(self, recall, class_names):
+        max_dets = self._params.maxDets[-1]
+        ar_per_class = recall[:, :, :, 0, max_dets - 1]
+        ar_results = {}
+        
+        if class_names is None:
+            class_names = [f"class_{i}" for i in range(ar_per_class.shape[0])]
+        
+        for idx, ar in enumerate(ar_per_class):
+            ar_results[f'AR_{class_names[idx]}'] = np.mean(ar[ar > -1])
+        
+        return ar_results
 from detectron2.evaluation import (
     CityscapesInstanceEvaluator,
     CityscapesSemSegEvaluator,
@@ -45,45 +76,7 @@ class Trainer(DefaultTrainer):
         """
         if output_folder is None:
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
-        evaluator_list = []
-        evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
-        if evaluator_type in ["sem_seg", "coco_panoptic_seg"]:
-            evaluator_list.append(
-                SemSegEvaluator(
-                    dataset_name,
-                    distributed=True,
-                    num_classes=cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES,
-                    ignore_label=cfg.MODEL.SEM_SEG_HEAD.IGNORE_VALUE,
-                    output_dir=output_folder,
-                )
-            )
-        if evaluator_type in ["coco", "coco_panoptic_seg"]:
-            evaluator_list.append(COCOMaskEvaluator(dataset_name, ("segm", ), True, output_folder))
-        if evaluator_type == "coco_panoptic_seg":
-            evaluator_list.append(COCOPanopticEvaluator(dataset_name, output_folder))
-        if evaluator_type == "cityscapes_instance":
-            assert (
-                torch.cuda.device_count() >= comm.get_rank()
-            ), "CityscapesEvaluator currently do not work with multiple machines."
-            return CityscapesInstanceEvaluator(dataset_name)
-        if evaluator_type == "cityscapes_sem_seg":
-            assert (
-                torch.cuda.device_count() >= comm.get_rank()
-            ), "CityscapesEvaluator currently do not work with multiple machines."
-            return CityscapesSemSegEvaluator(dataset_name)
-        elif evaluator_type == "pascal_voc":
-            return PascalVOCDetectionEvaluator(dataset_name)
-        elif evaluator_type == "lvis":
-            return LVISEvaluator(dataset_name, cfg, True, output_folder)
-        if len(evaluator_list) == 0:
-            raise NotImplementedError(
-                "no Evaluator for the dataset {} with the type {}".format(
-                    dataset_name, evaluator_type
-                )
-            )
-        elif len(evaluator_list) == 1:
-            return evaluator_list[0]
-        return DatasetEvaluators(evaluator_list)
+        return COCOEvaluatorWithAR(dataset_name, cfg, True, output_dir=output_folder)
 
     @classmethod
     def build_optimizer(cls, cfg, model):
