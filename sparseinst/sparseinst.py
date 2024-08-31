@@ -213,10 +213,13 @@ class SparseInst(nn.Module):
     def inference(self, output, batched_inputs, max_shape, image_sizes):
         # max_detections = self.max_detections
         results = []
-        pred_scores = output["pred_logits"].sigmoid()
+        temp_src_logits = output["pred_logits"].clone()
         pred_masks = output["pred_masks"].sigmoid()
         pred_objectness = output["pred_scores"].sigmoid()
-        pred_scores = torch.sqrt(pred_scores * pred_objectness)
+        temp_src_logits = torch.sigmoid(temp_src_logits)
+        temp_src_logits[:,:, self.invalid_cls_logits] = -10e10
+        src_logits = temp_src_logits
+        pred_scores = torch.sqrt(src_logits * pred_objectness)
 
         for _, (scores_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
                 pred_scores, pred_masks, batched_inputs, image_sizes)):
