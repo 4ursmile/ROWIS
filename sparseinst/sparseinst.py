@@ -133,7 +133,7 @@ class SparseInst(nn.Module):
         self.max_detections = cfg.MODEL.SPARSE_INST.MAX_DETECTIONS
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
 
-        self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
+        self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS + cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
         self.temperature = cfg.MODEL.OWIS.TEMPERATURE
         self.pred_per_image = cfg.MODEL.OWIS.PRED_PER_IMAGE
         self.temperature = cfg.MODEL.OWIS.TEMPERATURE/cfg.MODEL.OWIS.HIDDEN_DIM
@@ -213,10 +213,9 @@ class SparseInst(nn.Module):
     def inference(self, output, batched_inputs, max_shape, image_sizes):
         # max_detections = self.max_detections
         results = []
-        temp_src_logits = output["pred_logits"].clone()
+        temp_src_logits = output["pred_logits"].sigmoid()
         pred_masks = output["pred_masks"].sigmoid()
         pred_objectness = output["pred_scores"].sigmoid()
-        temp_src_logits = torch.sigmoid(temp_src_logits)
         temp_src_logits[:,:, self.invalid_cls_logits] = -10e10
         src_logits = temp_src_logits
         pred_scores = torch.sqrt(src_logits * pred_objectness)
