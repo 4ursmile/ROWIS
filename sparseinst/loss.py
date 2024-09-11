@@ -108,26 +108,33 @@ class SparseInstCriterion(nn.Module):
 
         idx = self._get_src_permutation_idx(indices)
         target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
-       
+    
         target_classes = torch.full(src_logits.shape[:2], self.num_classes - 1, dtype=torch.int64, device=src_logits.device)
         target_classes[idx] = target_classes_o
 
         # Handle unmatched predictions
-        objectness_scores = outputs['pred_scores'].sigmoid().flatten(1)
+        objectness_scores = outputs['pred_scores'].sigmoid()  # shape [batch_size, num_queries]
         matched_mask = torch.zeros(src_logits.shape[:2], dtype=torch.bool, device=src_logits.device)
         matched_mask[idx] = True
         unmatched_mask = ~matched_mask
 
-        # get number of matched instances in each image
+        # Get number of matched instances in each image
         num_instances_per_image = [len(t["labels"]) for t in targets]
-        # get average number of instances per image
+        # Get average number of instances per image
         avg_num_instances = sum(num_instances_per_image) / len(num_instances_per_image)
 
-        # Get top k unmatched predictions based on objectness score
-        top_k_unmatched = torch.topk(objectness_scores[unmatched_mask], k=min(self.top_k_unmatched, unmatched_mask.sum(), avg_num_instances), dim=1)[1]
-        
-        # Assign unknown class (last class) to top k unmatched predictions
-        target_classes[unmatched_mask][top_k_unmatched] = self.num_classes - 1
+        # Process unmatched predictions per image
+        for i in range(src_logits.shape[0]):
+            unmatched_mask_i = unmatched_mask[i]  # shape [num_queries]
+            objectness_scores_i = objectness_scores[i]  # shape [num_queries]
+            num_unmatched = unmatched_mask_i.sum().item()
+            k = min(self.top_k_unmatched, num_unmatched, int(avg_num_instances * 0.3))
+            if k > 0 and num_unmatched > 0:
+                unmatched_scores_i = objectness_scores_i[unmatched_mask_i]  # shape [num_unmatched]
+                topk_indices_i = torch.topk(unmatched_scores_i, k=k)[1]
+                unmatched_indices_i = torch.nonzero(unmatched_mask_i).squeeze(1)
+                selected_indices = unmatched_indices_i[topk_indices_i]
+                target_classes[i, selected_indices] = self.num_classes - 1
 
         target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]],
                                             dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device)
@@ -135,7 +142,7 @@ class SparseInstCriterion(nn.Module):
         target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
 
         loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_instances, alpha=0.25,
-                                     num_classes=self.num_classes, empty_weight=self.empty_weight) * src_logits.shape[1]
+                                    num_classes=self.num_classes, empty_weight=self.empty_weight) * src_logits.shape[1]
 
         losses = {'loss_ce': loss_ce}
         return losses
@@ -191,7 +198,7 @@ class SparseInstCriterion(nn.Module):
         avg_num_instances = sum(num_instances_per_image) / len(num_instances_per_image)
         # Get top k unmatched predictions based on objectness score
         objectness_scores = src_iou_scores.sigmoid().flatten(1)
-        top_k_unmatched = torch.topk(objectness_scores[unmatched_mask], k=min(self.top_k_unmatched, unmatched_mask.sum(), avg_num_instances), dim=1)[1]
+        top_k_unmatched = torch.topk(objectness_scores[unmatched_mask], k=min(self.top_k_unmatched, unmatched_mask.sum(), int(avg_num_instances*0.3)), dim=1)[1]
 
         # Assign average IoU score to top k unmatched predictions
         avg_iou = ious.mean()
