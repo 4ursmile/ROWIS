@@ -215,7 +215,12 @@ class SparseInstCriterion(nn.Module):
         tgt_iou_scores[unmatched_mask][top_k_unmatched] = avg_iou
 
         # Other unmatched predictions are assigned the empty_weight
-        tgt_iou_scores[unmatched_mask & ~top_k_unmatched] = self.empty_weight
+        # Reshape or expand top_k_unmatched to match the dimensions of unmatched_mask
+        top_k_unmatched_expanded = top_k_unmatched.unsqueeze(-1).expand_as(unmatched_mask)
+
+        # Ensure shapes match before performing the bitwise operation
+        tgt_iou_scores[unmatched_mask & ~top_k_unmatched_expanded] = self.empty_weight
+
 
         tgt_iou_scores = tgt_iou_scores.flatten(0)
         src_iou_scores = src_iou_scores.flatten(0)
