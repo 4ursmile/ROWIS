@@ -210,17 +210,13 @@ class SparseInstCriterion(nn.Module):
                                         k=min(self.top_k_unmatched, unmatched_objectness_scores.size(1), int(avg_num_instances * 0.3)), 
                                         dim=1)[1]
 
-        # Assign average IoU score to top k unmatched predictions
-        avg_iou = ious.mean()
-        tgt_iou_scores[unmatched_mask][top_k_unmatched] = avg_iou
 
         # Other unmatched predictions are assigned the empty_weight
-        # Reshape or expand top_k_unmatched to match the dimensions of unmatched_mask
-        top_k_unmatched_expanded = top_k_unmatched.unsqueeze(-1).expand_as(unmatched_mask)
+        tgt_iou_scores[unmatched_mask][~top_k_unmatched] = self.empty_weight
 
-        # Ensure shapes match before performing the bitwise operation
-        tgt_iou_scores[unmatched_mask & ~top_k_unmatched_expanded] = self.empty_weight
-
+         # Assign average IoU score to top k unmatched predictions
+        avg_iou = ious.mean()
+        tgt_iou_scores[unmatched_mask][top_k_unmatched] = avg_iou
 
         tgt_iou_scores = tgt_iou_scores.flatten(0)
         src_iou_scores = src_iou_scores.flatten(0)
