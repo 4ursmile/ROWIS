@@ -94,8 +94,8 @@ class PrototypeMemoryBank:
 
         # Compute contrastive loss
         similarities = torch.mm(new_features, self.features.t())
-        positive_similarities = similarities[torch.arange(num_new), self.labels == new_labels.unsqueeze(1)]
-        negative_similarities = similarities[torch.arange(num_new), self.labels != new_labels.unsqueeze(1)]
+        positive_similarities = similarities[self.labels == new_labels.unsqueeze(1)]
+        negative_similarities = similarities[self.labels != new_labels.unsqueeze(1)]
         
         contrastive_loss = -torch.log(torch.exp(positive_similarities) / 
                                       (torch.exp(positive_similarities) + torch.exp(negative_similarities).sum(1)))
