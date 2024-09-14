@@ -205,7 +205,6 @@ class SparseInstCriterion(nn.Module):
         assert "pred_scores" in outputs
         src_iou_scores = outputs["pred_scores"]
         src_masks = outputs["pred_masks"]
-        src_embeddings = outputs["embeddings"]
         with torch.no_grad():
             target_masks, _ = nested_masks_from_list(
                 [t["masks"].tensor for t in targets], input_shape).decompose()
