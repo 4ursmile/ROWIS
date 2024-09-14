@@ -127,10 +127,9 @@ class SparseInstCriterion(nn.Module):
         self.unknown_loss_weight = cfg.MODEL.OWIS.UNKNOWN_LOSS_WEIGHT
 
         self.confidence_calibration = ConfidenceCalibration(cfg.MODEL.OWIS.CALIBRATION_TEMPERATURE)
-        self.contrastive_loss_weight = cfg.MODEL.OWIS.CONTRASTIVE_LOSS_WEIGHT
 
     def get_weight_dict(self, cfg):
-        losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness", "loss_unknow", "loss_contrastive")
+        losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness", "loss_unknow")
         weight_dict = {}
         ce_weight = cfg.MODEL.SPARSE_INST.LOSS.CLASS_WEIGHT
         mask_weight = cfg.MODEL.SPARSE_INST.LOSS.MASK_PIXEL_WEIGHT
