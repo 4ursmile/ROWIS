@@ -9,7 +9,6 @@ from fvcore.nn import sigmoid_focal_loss_jit
 import math
 import copy
 from typing import List, Dict, Tuple
-from collections import defaultdictv
 
 from detectron2.utils.registry import Registry
 
