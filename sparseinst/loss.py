@@ -98,7 +98,7 @@ class PrototypeMemoryBank:
         negative_similarities = similarities[self.labels != new_labels.unsqueeze(1)]
         
         contrastive_loss = -torch.log(torch.exp(positive_similarities) / 
-                                      (torch.exp(positive_similarities) + torch.exp(negative_similarities).sum(1)))
+                                      (torch.exp(positive_similarities) + torch.exp(negative_similarities)))
         return contrastive_loss.mean()
 
     def get_unknown_prototypes(self) -> Dict[int, List[torch.Tensor]]:
