@@ -97,9 +97,9 @@ class PrototypeMemoryBank:
         positive_similarities = similarities[self.labels == new_labels.unsqueeze(1)]
         negative_similarities = similarities[self.labels != new_labels.unsqueeze(1)]
         
-        contrastive_loss = -torch.log(torch.exp(positive_similarities) / 
+        contrastive_loss = -torch.log(torch.exp(positive_similarities).mean() / 
                                       (torch.exp(positive_similarities).max() + torch.exp(negative_similarities).max()))
-        return contrastive_loss.mean()
+        return contrastive_loss
 
     def get_unknown_prototypes(self) -> Dict[int, List[torch.Tensor]]:
         return {i: self.prototypes[i] for i in range(self.num_classes) if i not in self.invalid_cls_logits}
