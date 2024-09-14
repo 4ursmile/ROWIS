@@ -258,7 +258,7 @@ class SparseInstCriterion(nn.Module):
 
 
         # Other unmatched predictions are assigned the empty_weight
-        tgt_iou_scores[unmatched_mask][~unknown_mask] = self.empty_weight
+        tgt_iou_scores[unmatched_mask & ~unknown_mask] = self.empty_weight/5
 
         # Update memory bank and get contrastive loss
         target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
