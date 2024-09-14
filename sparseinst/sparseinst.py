@@ -226,8 +226,8 @@ class SparseInst(nn.Module):
         src_logits = torch.sigmoid(temp_src_logits)
         pred_scores = torch.sqrt(src_logits * pred_objectness)
 
-        for _, (scores_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
-                pred_scores, pred_masks, batched_inputs, image_sizes)):
+        for _, (scores_per_image, mask_pred_per_image, embedding_per_image, batched_input, img_shape) in enumerate(zip(
+                pred_scores, pred_masks, pred_embeddings, batched_inputs, image_sizes)):
 
             ori_shape = (batched_input["height"], batched_input["width"])
             result = Instances(ori_shape)
