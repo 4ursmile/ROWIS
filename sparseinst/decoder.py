@@ -302,7 +302,7 @@ class BaseIAMDecoder(nn.Module):
     def forward(self, features):
         coord_features = self.compute_coordinates(features)
         features = torch.cat([coord_features, features], dim=1)
-        pred_logits, pred_kernel, pred_scores, iam, embeddings = self.inst_branch(features)
+        pred_logits, pred_kernel, pred_scores, iam= self.inst_branch(features)
         mask_features = self.mask_branch(features)
 
         N = pred_kernel.shape[1]
@@ -319,7 +319,6 @@ class BaseIAMDecoder(nn.Module):
             "pred_logits": pred_logits,
             "pred_masks": pred_masks,
             "pred_scores": pred_scores,
-            "embeddings": embeddings
         }
 
         if self.output_iam:
@@ -404,7 +403,7 @@ class GroupInstanceBranch(nn.Module):
             pred_logits = self.cls_score(inst_features)
             pred_kernel = self.mask_kernel(inst_features)
             pred_scores = self.objectness(inst_features)
-            return pred_logits, pred_kernel, pred_scores, iam, inst_features
+            return pred_logits, pred_kernel, pred_scores, iam
 
 
 @SPARSE_INST_DECODER_REGISTRY.register()
