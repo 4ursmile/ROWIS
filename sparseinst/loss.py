@@ -68,9 +68,10 @@ class PrototypeMemoryBank:
         self.size = size
         self.feature_dim = feature_dim
         self.num_classes = num_classes
-        self.features = torch.zeros(size, feature_dim)
-        self.labels = torch.zeros(size, dtype=torch.long)
-        self.ious = torch.zeros(size)
+        device = torch.cuda.current_device()
+        self.features = torch.zeros(size, feature_dim).to(torch.device(device))
+        self.labels = torch.zeros(size, dtype=torch.long).to(torch.device(device))
+        self.ious = torch.zeros(size).to(torch.device(device))
         self.index = 0
         self.prototypes = {i: [] for i in range(num_classes)}
 
