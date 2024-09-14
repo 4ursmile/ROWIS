@@ -10,7 +10,7 @@ from detectron2.modeling import META_ARCH_REGISTRY, build_backbone
 
 from .encoder import build_sparse_inst_encoder
 from .decoder import build_sparse_inst_decoder
-from .loss import build_sparse_inst_criterion, PrototypeMemoryBank, ConfidenceCalibration
+from .loss import build_sparse_inst_criterion
 from .utils import nested_tensor_from_tensor_list
 import typing
 from collections import defaultdict
@@ -136,10 +136,7 @@ class SparseInst(nn.Module):
         self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS + cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
         self.temperature = cfg.MODEL.OWIS.TEMPERATURE
         self.pred_per_image = cfg.MODEL.OWIS.PRED_PER_IMAGE
-        self.confidence_calibration = ConfidenceCalibration(cfg.MODEL.OWIS.CALIBRATION_TEMPERATURE)
-        dim = cfg.MODEL.SPARSE_INST.DECODER.INST.DIM
-        num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
-        self.objectness_threshold = cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD
+
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
         print(f"Number of parameters: {parameter_count_table(self, 3)}")
     def normalizer(self, image):
@@ -224,7 +221,7 @@ class SparseInst(nn.Module):
         src_logits = torch.sigmoid(temp_src_logits)
         pred_scores = torch.sqrt(src_logits * pred_objectness)
 
-        for _, (scores_per_image, mask_pred_per_image, embedding_per_image, batched_input, img_shape) in enumerate(zip(
+        for _, (scores_per_image, mask_pred_per_image, batched_input, img_shape) in enumerate(zip(
                 pred_scores, pred_masks, batched_inputs, image_sizes)):
 
             ori_shape = (batched_input["height"], batched_input["width"])

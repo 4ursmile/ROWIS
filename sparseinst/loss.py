@@ -63,46 +63,7 @@ def dice_loss(inputs, targets, reduction='sum'):
         return loss
     return loss.sum()
 
-class PrototypeMemoryBank:
-    def __init__(self, size: int, feature_dim: int, num_classes: int):
-        self.size = size
-        self.feature_dim = feature_dim
-        self.num_classes = num_classes
-        device = torch.cuda.current_device()
-        self.features = torch.zeros(size, feature_dim).to(torch.device(device))
-        self.labels = torch.zeros(size, dtype=torch.long).to(torch.device(device))
-        self.ious = torch.zeros(size).to(torch.device(device))
-        self.index = 0
-        self.prototypes = {i: [] for i in range(num_classes)}
 
-    def update_and_contrast(self, new_features: torch.Tensor, new_ious: torch.Tensor, new_labels: torch.Tensor) -> torch.Tensor:
-        num_new = new_features.size(0)
-        if self.index + num_new > self.size:
-            self.index = 0
-        
-        end_index = min(self.index + num_new, self.size)
-        self.features[self.index:end_index] = new_features[:end_index-self.index]
-        self.ious[self.index:end_index] = new_ious[:end_index-self.index]
-        self.labels[self.index:end_index] = new_labels[:end_index-self.index]
-        self.index = end_index
-
-        # Update prototypes
-        for i in range(self.num_classes):
-            class_features = self.features[self.labels == i]
-            if len(class_features) > 0:
-                self.prototypes[i] = class_features.mean(0, keepdim=True)
-
-        # Compute contrastive loss
-        similarities = torch.mm(new_features, self.features.t())
-        positive_similarities = similarities[self.labels == new_labels.unsqueeze(1)]
-        negative_similarities = similarities[self.labels != new_labels.unsqueeze(1)]
-        
-        contrastive_loss = -torch.log(torch.exp(positive_similarities).mean() / 
-                                      (torch.exp(positive_similarities).max() + torch.exp(negative_similarities).max()))
-        return contrastive_loss
-
-    def get_unknown_prototypes(self) -> Dict[int, List[torch.Tensor]]:
-        return {i: self.prototypes[i] for i in range(self.num_classes) if i not in self.invalid_cls_logits}
 
 class ConfidenceCalibration(nn.Module):
     def __init__(self, temperature: float):
@@ -256,8 +217,7 @@ class SparseInstCriterion(nn.Module):
         # Other unmatched predictions are assigned the empty_weight
         tgt_iou_scores[unmatched_mask & ~unknown_mask] = self.empty_weight/5
 
-        # Update memory bank and get contrastive loss
-        target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
+   
 
 
         tgt_iou_scores = tgt_iou_scores.flatten(0)
