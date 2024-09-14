@@ -139,7 +139,6 @@ class SparseInst(nn.Module):
         self.confidence_calibration = ConfidenceCalibration(cfg.MODEL.OWIS.CALIBRATION_TEMPERATURE)
         dim = cfg.MODEL.SPARSE_INST.DECODER.INST.DIM
         num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
-        self.memory_bank = PrototypeMemoryBank(cfg.MODEL.OWIS.MEMORY_BANK_SIZE, dim*num_groups, self.num_classes)
         self.objectness_threshold = cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
         print(f"Number of parameters: {parameter_count_table(self, 3)}")

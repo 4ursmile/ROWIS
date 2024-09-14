@@ -125,9 +125,7 @@ class SparseInstCriterion(nn.Module):
         self.unknown_class_id = self.num_classes - 1
         self.objectness_threshold = cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD
         self.unknown_loss_weight = cfg.MODEL.OWIS.UNKNOWN_LOSS_WEIGHT
-        dim = cfg.MODEL.SPARSE_INST.DECODER.INST.DIM
-        num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
-        self.memory_bank = PrototypeMemoryBank(cfg.MODEL.OWIS.MEMORY_BANK_SIZE, dim*num_groups, self.num_classes)
+
         self.confidence_calibration = ConfidenceCalibration(cfg.MODEL.OWIS.CALIBRATION_TEMPERATURE)
         self.contrastive_loss_weight = cfg.MODEL.OWIS.CONTRASTIVE_LOSS_WEIGHT
 
@@ -139,9 +137,8 @@ class SparseInstCriterion(nn.Module):
         dice_weight = cfg.MODEL.SPARSE_INST.LOSS.MASK_DICE_WEIGHT
         objectness_weight = cfg.MODEL.SPARSE_INST.LOSS.OBJECTNESS_WEIGHT
         unknown_weight = cfg.MODEL.OWIS.UNKNOWN_LOSS_WEIGHT
-        contrastive_weight = cfg.MODEL.OWIS.CONTRASTIVE_LOSS_WEIGHT
         weight_dict = dict(
-            zip(losses, (ce_weight, mask_weight, dice_weight, objectness_weight, unknown_weight, contrastive_weight)))
+            zip(losses, (ce_weight, mask_weight, dice_weight, objectness_weight, unknown_weight)))
         return weight_dict
 
     def _get_src_permutation_idx(self, indices):
@@ -263,7 +260,6 @@ class SparseInstCriterion(nn.Module):
 
         # Update memory bank and get contrastive loss
         target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
-        contrastive_loss = self.memory_bank.update_and_contrast(src_embeddings[src_idx], ious, target_classes_o)
 
 
         tgt_iou_scores = tgt_iou_scores.flatten(0)
@@ -273,7 +269,6 @@ class SparseInstCriterion(nn.Module):
             "loss_objectness": F.binary_cross_entropy_with_logits(src_iou_scores, tgt_iou_scores, reduction='mean'),
             "loss_dice": dice_loss(src_masks, target_masks) / num_instances,
             "loss_mask": F.binary_cross_entropy_with_logits(src_masks, target_masks, reduction='mean'),
-            "loss_contrastive": contrastive_loss * self.contrastive_loss_weight
         }
         return losses
 
