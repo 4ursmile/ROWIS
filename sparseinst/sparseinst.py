@@ -10,7 +10,7 @@ from detectron2.modeling import META_ARCH_REGISTRY, build_backbone
 
 from .encoder import build_sparse_inst_encoder
 from .decoder import build_sparse_inst_decoder
-from .loss import build_sparse_inst_criterion
+from .loss import build_sparse_inst_criterion, PrototypeMemoryBank, ConfidenceCalibration
 from .utils import nested_tensor_from_tensor_list
 import typing
 from collections import defaultdict
@@ -136,7 +136,12 @@ class SparseInst(nn.Module):
         self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS + cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
         self.temperature = cfg.MODEL.OWIS.TEMPERATURE
         self.pred_per_image = cfg.MODEL.OWIS.PRED_PER_IMAGE
-        self.temperature = cfg.MODEL.OWIS.TEMPERATURE/cfg.MODEL.OWIS.HIDDEN_DIM
+        self.confidence_calibration = ConfidenceCalibration(cfg.MODEL.OWIS.CALIBRATION_TEMPERATURE)
+        dim = cfg.MODEL.SPARSE_INST.DECODER.INST.DIM
+        num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
+        self.memory_bank = PrototypeMemoryBank(cfg.MODEL.OWIS.MEMORY_BANK_SIZE, dim*num_groups, self.num_classes)
+        self.objectness_threshold = cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD
+        self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
         print(f"Number of parameters: {parameter_count_table(self, 3)}")
     def normalizer(self, image):
         image = (image - self.pixel_mean) / self.pixel_std
@@ -211,11 +216,12 @@ class SparseInst(nn.Module):
         return pred_scores, pred_masks
 
     def inference(self, output, batched_inputs, max_shape, image_sizes):
-        # max_detections = self.max_detections
+        max_detections = self.max_detections
         results = []
         temp_src_logits = output["pred_logits"].clone()
         pred_masks = output["pred_masks"].sigmoid()
         pred_objectness = output["pred_scores"].sigmoid()
+        pred_embeddings = output["embeddings"]
         temp_src_logits[:,:, self.invalid_cls_logits] = -10e10
         src_logits = torch.sigmoid(temp_src_logits)
         pred_scores = torch.sqrt(src_logits * pred_objectness)

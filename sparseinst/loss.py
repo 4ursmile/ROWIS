@@ -8,7 +8,8 @@ from scipy.optimize import linear_sum_assignment
 from fvcore.nn import sigmoid_focal_loss_jit
 import math
 import copy
-
+from typing import List, Dict, Tuple
+from collections import defaultdictv
 
 from detectron2.utils.registry import Registry
 
@@ -63,6 +64,53 @@ def dice_loss(inputs, targets, reduction='sum'):
         return loss
     return loss.sum()
 
+class PrototypeMemoryBank:
+    def __init__(self, size: int, feature_dim: int, num_classes: int):
+        self.size = size
+        self.feature_dim = feature_dim
+        self.num_classes = num_classes
+        self.features = torch.zeros(size, feature_dim)
+        self.labels = torch.zeros(size, dtype=torch.long)
+        self.ious = torch.zeros(size)
+        self.index = 0
+        self.prototypes = {i: [] for i in range(num_classes)}
+
+    def update_and_contrast(self, new_features: torch.Tensor, new_ious: torch.Tensor, new_labels: torch.Tensor) -> torch.Tensor:
+        num_new = new_features.size(0)
+        if self.index + num_new > self.size:
+            self.index = 0
+        
+        end_index = min(self.index + num_new, self.size)
+        self.features[self.index:end_index] = new_features[:end_index-self.index]
+        self.ious[self.index:end_index] = new_ious[:end_index-self.index]
+        self.labels[self.index:end_index] = new_labels[:end_index-self.index]
+        self.index = end_index
+
+        # Update prototypes
+        for i in range(self.num_classes):
+            class_features = self.features[self.labels == i]
+            if len(class_features) > 0:
+                self.prototypes[i] = class_features.mean(0, keepdim=True)
+
+        # Compute contrastive loss
+        similarities = torch.mm(new_features, self.features.t())
+        positive_similarities = similarities[torch.arange(num_new), self.labels == new_labels.unsqueeze(1)]
+        negative_similarities = similarities[torch.arange(num_new), self.labels != new_labels.unsqueeze(1)]
+        
+        contrastive_loss = -torch.log(torch.exp(positive_similarities) / 
+                                      (torch.exp(positive_similarities) + torch.exp(negative_similarities).sum(1)))
+        return contrastive_loss.mean()
+
+    def get_unknown_prototypes(self) -> Dict[int, List[torch.Tensor]]:
+        return {i: self.prototypes[i] for i in range(self.num_classes) if i not in self.invalid_cls_logits}
+
+class ConfidenceCalibration(nn.Module):
+    def __init__(self, temperature: float):
+        super().__init__()
+        self.temperature = nn.Parameter(torch.ones(1) * temperature)
+
+    def forward(self, logits: torch.Tensor) -> torch.Tensor:
+        return logits / self.temperature
 
 @SPARSE_INST_CRITERION_REGISTRY.register()
 class SparseInstCriterion(nn.Module):
@@ -74,18 +122,26 @@ class SparseInstCriterion(nn.Module):
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES 
         self.empty_weight = cfg.MODEL.OWIS.EMPTY_WEIGHT
         self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
-        self.top_k_unmatched = 5  # Number of top unmatched predictions to consider
+        self.unknown_class_id = self.num_classes - 1
+        self.objectness_threshold = cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD
+        self.unknown_loss_weight = cfg.MODEL.OWIS.UNKNOWN_LOSS_WEIGHT
+        dim = cfg.MODEL.SPARSE_INST.DECODER.INST.DIM
+        num_groups = cfg.MODEL.SPARSE_INST.DECODER.GROUPS
+        self.memory_bank = PrototypeMemoryBank(cfg.MODEL.OWIS.MEMORY_BANK_SIZE, dim*num_groups, self.num_classes)
+        self.confidence_calibration = ConfidenceCalibration(cfg.MODEL.OWIS.CALIBRATION_TEMPERATURE)
+        self.contrastive_loss_weight = cfg.MODEL.OWIS.CONTRASTIVE_LOSS_WEIGHT
 
     def get_weight_dict(self, cfg):
-        losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness")
+        losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness", "loss_unknow", "loss_contrastive")
         weight_dict = {}
         ce_weight = cfg.MODEL.SPARSE_INST.LOSS.CLASS_WEIGHT
         mask_weight = cfg.MODEL.SPARSE_INST.LOSS.MASK_PIXEL_WEIGHT
         dice_weight = cfg.MODEL.SPARSE_INST.LOSS.MASK_DICE_WEIGHT
         objectness_weight = cfg.MODEL.SPARSE_INST.LOSS.OBJECTNESS_WEIGHT
-
+        unknown_weight = cfg.MODEL.OWIS.UNKNOWN_LOSS_WEIGHT
+        contrastive_weight = cfg.MODEL.OWIS.CONTRASTIVE_LOSS_WEIGHT
         weight_dict = dict(
-            zip(losses, (ce_weight, mask_weight, dice_weight, objectness_weight)))
+            zip(losses, (ce_weight, mask_weight, dice_weight, objectness_weight, unknown_weight, contrastive_weight)))
         return weight_dict
 
     def _get_src_permutation_idx(self, indices):
@@ -118,25 +174,14 @@ class SparseInstCriterion(nn.Module):
         matched_mask[idx] = True
         unmatched_mask = ~matched_mask
 
-        # get number of matched instances in each image
-        num_instances_per_image = [len(t["labels"]) for t in targets]
-        # get average number of instances per image
-        avg_num_instances = sum(num_instances_per_image) / len(num_instances_per_image)
-
-        # Get top k unmatched predictions based on objectness score
-        unmatched_objectness_scores = objectness_scores[unmatched_mask]
-
-        # If the result is a 1D tensor, use dim=0 for topk
-        if unmatched_objectness_scores.dim() == 1:
-            top_k_unmatched = torch.topk(unmatched_objectness_scores, 
-                                        k=min(self.top_k_unmatched, unmatched_objectness_scores.size(0), int(avg_num_instances * 0.3)))[1]
-        else:
-            top_k_unmatched = torch.topk(unmatched_objectness_scores, 
-                                        k=min(self.top_k_unmatched, unmatched_objectness_scores.size(1), int(avg_num_instances * 0.3)), 
-                                        dim=1)[1]
         
-        # Assign unknown class (last class) to top k unmatched predictions
-        target_classes[unmatched_mask][top_k_unmatched] = self.num_classes - 1
+
+        # Adaptive thresholding for unknown objects
+        unknown_mask = (objectness_scores > self.objectness_threshold) & unmatched_mask
+        target_classes[unknown_mask] = self.unknown_class_id
+
+        # Apply confidence calibration
+        calibrated_logits = self.confidence_calibration(src_logits)
 
         target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]],
                                             dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device)
@@ -144,9 +189,17 @@ class SparseInstCriterion(nn.Module):
         target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
 
         loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_instances, alpha=0.25,
-                                     num_classes=self.num_classes, empty_weight=self.empty_weight) * src_logits.shape[1]
+                                     num_classes=self.num_classes, empty_weight=self.empty_weight) * calibrated_logits.shape[1]
 
-        losses = {'loss_ce': loss_ce}
+        # Additional loss for unknown class
+        unknown_logits = calibrated_logits[:, :, self.unknown_class_id]
+        unknown_targets = (target_classes == self.unknown_class_id).float()
+        loss_unknown = F.binary_cross_entropy_with_logits(unknown_logits, unknown_targets, reduction='mean')
+
+        losses = {
+            'loss_ce': loss_ce,
+            'loss_unknown': loss_unknown * self.unknown_loss_weight
+        }
         return losses
 
     def loss_masks_with_iou_objectness(self, outputs, targets, indices, num_instances, input_shape):
@@ -156,6 +209,7 @@ class SparseInstCriterion(nn.Module):
         assert "pred_scores" in outputs
         src_iou_scores = outputs["pred_scores"]
         src_masks = outputs["pred_masks"]
+        src_embeddings = outputs["embeddings"]
         with torch.no_grad():
             target_masks, _ = nested_masks_from_list(
                 [t["masks"].tensor for t in targets], input_shape).decompose()
@@ -194,29 +248,23 @@ class SparseInstCriterion(nn.Module):
         unmatched_mask = torch.ones(src_iou_scores.shape[:2], dtype=torch.bool, device=src_iou_scores.device)
         unmatched_mask[src_idx[0], src_idx[1]] = False
 
-        # get number of matched instances in each image
-        num_instances_per_image = [len(t["labels"]) for t in targets]
-        # get average number of instances per image
-        avg_num_instances = sum(num_instances_per_image) / len(num_instances_per_image)
-        # Get top k unmatched predictions based on objectness score
+        # Adaptive thresholding for unknown objects
         objectness_scores = src_iou_scores.sigmoid().flatten(1)
-        unmatched_objectness_scores = objectness_scores[unmatched_mask]
-        # If the result is a 1D tensor, use dim=0 for topk
-        if unmatched_objectness_scores.dim() == 1:
-            top_k_unmatched = torch.topk(unmatched_objectness_scores, 
-                                        k=min(self.top_k_unmatched, unmatched_objectness_scores.size(0), int(avg_num_instances * 0.3)))[1]
-        else:
-            top_k_unmatched = torch.topk(unmatched_objectness_scores, 
-                                        k=min(self.top_k_unmatched, unmatched_objectness_scores.size(1), int(avg_num_instances * 0.3)), 
-                                        dim=1)[1]
+        unknown_mask = (objectness_scores > self.objectness_threshold) & unmatched_mask
+
+        # Assign average IoU score to unknown predictions
+        avg_iou = ious.mean()
+        tgt_iou_scores[unknown_mask] = avg_iou
+
 
 
         # Other unmatched predictions are assigned the empty_weight
-        tgt_iou_scores[unmatched_mask][~top_k_unmatched] = self.empty_weight
+        tgt_iou_scores[unmatched_mask][~unknown_mask] = self.empty_weight
 
-         # Assign average IoU score to top k unmatched predictions
-        avg_iou = ious.mean()
-        tgt_iou_scores[unmatched_mask][top_k_unmatched] = avg_iou
+        # Update memory bank and get contrastive loss
+        target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
+        contrastive_loss = self.memory_bank.update_and_contrast(src_embeddings[src_idx], ious, target_classes_o)
+
 
         tgt_iou_scores = tgt_iou_scores.flatten(0)
         src_iou_scores = src_iou_scores.flatten(0)
@@ -224,7 +272,8 @@ class SparseInstCriterion(nn.Module):
         losses = {
             "loss_objectness": F.binary_cross_entropy_with_logits(src_iou_scores, tgt_iou_scores, reduction='mean'),
             "loss_dice": dice_loss(src_masks, target_masks) / num_instances,
-            "loss_mask": F.binary_cross_entropy_with_logits(src_masks, target_masks, reduction='mean')
+            "loss_mask": F.binary_cross_entropy_with_logits(src_masks, target_masks, reduction='mean'),
+            "loss_contrastive": contrastive_loss * self.contrastive_loss_weight
         }
         return losses
 
