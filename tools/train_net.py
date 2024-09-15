@@ -64,6 +64,32 @@ sys.path.append(".")
 from sparseinst import add_sparse_inst_config, COCOMaskEvaluator
 
 
+class ObjectnessThresholdScheduler:
+    def __init__(self, start_value, end_value, total_iterations):
+        self.start_value = start_value
+        self.end_value = end_value
+        self.total_iterations = total_iterations
+
+    def __call__(self, iteration):
+        return self.start_value + (self.end_value - self.start_value) * min(iteration / self.total_iterations, 1.0)
+
+# Detectron2 Hook for updating parameters
+class ParameterSchedulerHook:
+    def __init__(self, cfg):
+        self.objectness_scheduler = ObjectnessThresholdScheduler(
+            cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD_START,
+            cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD_END,
+            cfg.SOLVER.MAX_ITER
+        )
+
+    def before_step(self, model):
+        iteration = model.iter
+        model.criterion.objectness_threshold = self.objectness_scheduler(iteration)
+
+def add_sparseinst_hooks(cfg, trainer):
+    trainer.register_hooks([ParameterSchedulerHook(cfg)])
+    return trainer
+
 class Trainer(DefaultTrainer):
 
     @classmethod

@@ -155,7 +155,7 @@ class SparseInstCriterion(nn.Module):
 
         losses = {
             'loss_ce': loss_ce,
-            'loss_unknown': loss_unknown * self.unknown_loss_weight
+            'loss_unknown': loss_unknown 
         }
         return losses
 
@@ -215,7 +215,7 @@ class SparseInstCriterion(nn.Module):
 
 
         # Other unmatched predictions are assigned the empty_weight
-        tgt_iou_scores[unmatched_mask & ~unknown_mask] = self.empty_weight/5
+        tgt_iou_scores[unmatched_mask & ~unknown_mask] = self.empty_weight/10
 
    
 
