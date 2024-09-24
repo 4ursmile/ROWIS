@@ -3,8 +3,11 @@ import pycocotools.mask as mask_util
 from detectron2.structures import BoxMode
 from detectron2.evaluation import COCOEvaluator
 from detectron2.utils.logger import create_small_table
+from detectron2.utils import comm  # Add this import
 from tabulate import tabulate
 import itertools
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 
 def instances_to_coco_json(instances, img_id):
     """
@@ -21,34 +24,23 @@ def instances_to_coco_json(instances, img_id):
     if num_instance == 0:
         return []
 
-    # NOTE: pure instance segmentation
-    has_box = instances.has("pred_boxes")
-    if has_box:
-        boxes = instances.pred_boxes.tensor.numpy()
-        boxes = BoxMode.convert(boxes, BoxMode.XYXY_ABS, BoxMode.XYWH_ABS)
-        boxes = boxes.tolist()
-
-    scores = instances.scores.tolist()
-    classes = instances.pred_classes.tolist()
-
     has_mask = instances.has("pred_masks")
     if has_mask:
-        # use RLE to encode the masks, because they are too large and takes memory
-        # since this evaluator stores outputs of the entire dataset
+        # Convert masks to RLE format
         rles = [
             mask_util.encode(np.array(mask[:, :, None], order="F", dtype="uint8"))[0]
             for mask in instances.pred_masks
         ]
         for rle in rles:
-            # "counts" is an array encoded by mask_util as a byte-stream. Python3's
-            # json writer which always produces strings cannot serialize a bytestream
-            # unless you decode it. Thankfully, utf-8 works out (which is also what
-            # the pycocotools/_mask.pyx does).
             rle["counts"] = rle["counts"].decode("utf-8")
 
-    has_keypoints = instances.has("pred_keypoints")
-    if has_keypoints:
-        keypoints = instances.pred_keypoints
+        # Generate bounding boxes from masks
+        boxes = [mask_util.toBbox(rle).tolist() for rle in rles]
+    else:
+        return []
+
+    scores = instances.scores.tolist()
+    classes = instances.pred_classes.tolist()
 
     results = []
     for k in range(num_instance):
@@ -56,75 +48,106 @@ def instances_to_coco_json(instances, img_id):
             "image_id": img_id,
             "category_id": classes[k],
             "score": scores[k],
+            "segmentation": rles[k],
+            "bbox": boxes[k],
         }
-        if has_box:
-            result["bbox"] = boxes[k]
-        if has_mask:
-            result["segmentation"] = rles[k]
-        if has_keypoints:
-            # In COCO annotations,
-            # keypoints coordinates are pixel indices.
-            # However our predictions are floating point coordinates.
-            # Therefore we subtract 0.5 to be consistent with the annotation format.
-            # This is the inverse of data loading logic in `datasets/coco.py`.
-            keypoints[k][:, :2] -= 0.5
-            result["keypoints"] = keypoints[k].flatten().tolist()
         results.append(result)
     return results
 
-
 class COCOMaskEvaluator(COCOEvaluator):
+    def __init__(self, dataset_name, tasks, distributed, output_dir=None):
+        super().__init__(dataset_name, tasks, distributed, output_dir)
+        self._mask_predictions = []
+        self._bbox_predictions = []
 
     def process(self, inputs, outputs):
-        """
-        Args:
-            inputs: the inputs to a COCO model (e.g., GeneralizedRCNN).
-                It is a list of dict. Each dict corresponds to an image and
-                contains keys like "height", "width", "file_name", "image_id".
-            outputs: the outputs of a COCO model. It is a list of dicts with key
-                "instances" that contains :class:`Instances`.
-        """
         for input, output in zip(inputs, outputs):
             prediction = {"image_id": input["image_id"]}
 
             if "instances" in output:
                 instances = output["instances"].to(self._cpu_device)
                 prediction["instances"] = instances_to_coco_json(instances, input["image_id"])
-            if "proposals" in output:
-                prediction["proposals"] = output["proposals"].to(self._cpu_device)
+                
+                # Separate mask and bbox predictions
+                for p in prediction["instances"]:
+                    self._mask_predictions.append({
+                        "image_id": p["image_id"],
+                        "category_id": p["category_id"],
+                        "segmentation": p["segmentation"],
+                        "score": p["score"],
+                    })
+                    self._bbox_predictions.append({
+                        "image_id": p["image_id"],
+                        "category_id": p["category_id"],
+                        "bbox": p["bbox"],
+                        "score": p["score"],
+                    })
+
             if len(prediction) > 1:
                 self._predictions.append(prediction)
+
+    def evaluate(self):
+        if self._distributed:
+            comm.synchronize()
+            mask_predictions = comm.gather(self._mask_predictions, dst=0)
+            bbox_predictions = comm.gather(self._bbox_predictions, dst=0)
+            predictions = comm.gather(self._predictions, dst=0)
+            mask_predictions = list(itertools.chain(*mask_predictions))
+            bbox_predictions = list(itertools.chain(*bbox_predictions))
+            predictions = list(itertools.chain(*predictions))
+
+            if not comm.is_main_process():
+                return {}
+        else:
+            mask_predictions = self._mask_predictions
+            bbox_predictions = self._bbox_predictions
+            predictions = self._predictions
+
+        if len(predictions) == 0:
+            self._logger.warning("[COCOMaskEvaluator] Did not receive valid predictions.")
+            return {}
+
+        # Evaluate masks
+        mask_results = self._eval_predictions(mask_predictions, "segm")
+        
+        # Evaluate bounding boxes derived from masks
+        bbox_results = self._eval_predictions(bbox_predictions, "bbox")
+        
+        # Combine results
+        results = {
+            "segm": mask_results,
+            "bbox": bbox_results
+        }
+        
+        return results
+
+    def _eval_predictions(self, coco_results, iou_type):
+        coco_dt = self._coco_api.loadRes(coco_results)
+        coco_eval = COCOeval(self._coco_api, coco_dt, iou_type)
+        
+        coco_eval.evaluate()
+        coco_eval.accumulate()
+        coco_eval.summarize()
+        
+        return self._derive_coco_results(coco_eval, iou_type, self._metadata.get("thing_classes"))
+
     def _derive_coco_results(self, coco_eval, iou_type, class_names=None):
-        """
-        Derive the desired score numbers from summarized COCOeval.
-
-        Args:
-            coco_eval (None or COCOEval): None represents no predictions from model.
-            iou_type (str):
-            class_names (None or list[str]): if provided, will use it to predict
-                per-category AP.
-
-        Returns:
-            a dict of {metric name: score}
-        """
-
         metrics = {
             "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR", "AR50", "AR75", "ARs", "ARm", "ARl"],
             "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR", "AR50", "AR75", "ARs", "ARm", "ARl"],
-            "keypoints": ["AP", "AP50", "AP75", "APm", "APl", "AR", "AR50", "AR75", "ARm", "ARl"],
         }[iou_type]
 
         if coco_eval is None:
             self._logger.warn("No predictions from the model!")
             return {metric: float("nan") for metric in metrics}
 
-        # The standard metrics
         results = {
             metric: float(coco_eval.stats[idx] * 100 if coco_eval.stats[idx] >= 0 else "nan")
             for idx, metric in enumerate(metrics)
         }
         self._logger.info(
-            "Evaluation results for {}: \n".format(iou_type) + create_small_table(results)
+            "Evaluation results for {} {}: \n".format(iou_type, "masks" if iou_type == "segm" else "boxes") + 
+            create_small_table(results)
         )
         if not np.isfinite(sum(results.values())):
             self._logger.info("Some metrics cannot be computed and are shown as NaN.")
@@ -139,8 +162,6 @@ class COCOMaskEvaluator(COCOEvaluator):
 
         results_per_category = []
         for idx, name in enumerate(class_names):
-            # area range index 0: all area ranges
-            # max dets index -1: typically 100 per image
             precision = precisions[:, :, idx, 0, -1]
             precision = precision[precision > -1]
             ap = np.mean(precision) if precision.size else float("nan")
@@ -164,7 +185,7 @@ class COCOMaskEvaluator(COCOEvaluator):
             headers=["category", "AP", "AR"] * (N_COLS // 3),
             numalign="left",
         )
-        self._logger.info("Per-category {} AP and AR: \n".format(iou_type) + table)
+        self._logger.info("Per-category {} AP and AR for {} {}: \n".format(iou_type, iou_type, "masks" if iou_type == "segm" else "boxes") + table)
 
         results.update({"AP-" + name: ap for name, ap, _ in results_per_category})
         results.update({"AR-" + name: ar for name, _, ar in results_per_category})

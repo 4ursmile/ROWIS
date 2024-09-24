@@ -1,0 +1,22 @@
+_BASE_: "Base-SparseInst.yaml"
+MODEL:
+  WEIGHTS: "pretrained_models/R-50.pkl"
+  OWIS:
+    HIDDEN_DIM: 1024
+    PREV_INTRODUCED_CLS: 20
+    CUR_INTRODUCED_CLS: 20
+    EMPTY_WEIGHT: 0.08
+    CALIBRATION_TEMPERATURE: 1.2
+    OBJECTNESS_THRESHOLD: 0.25
+    CONTRASTIVE_LOSS_WEIGHT: 1
+    UNKNOWN_LOSS_WEIGHT: 0.9
+DATASETS:
+  TRAIN: ("coco_train_T2",)
+  TEST:  ("coco_val_T2",)
+INPUT:
+  CROP:
+    ENABLED: True
+    TYPE: "absolute_range"
+    SIZE: (384, 600)
+  MASK_FORMAT: "polygon"
+OUTPUT_DIR: "output/t1"
