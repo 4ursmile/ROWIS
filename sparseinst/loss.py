@@ -356,7 +356,7 @@ class SparseInstMatcher(nn.Module):
 
             pred_masks = pred_masks.view(B * N, -1)
             tgt_masks = tgt_masks.flatten(1)
-            with autocast("cuda", enabled=False):
+            with torch.autocast("cuda"):
                 pred_masks = pred_masks.float()
                 tgt_masks = tgt_masks.float()
                 pred_logits = pred_logits.float()
