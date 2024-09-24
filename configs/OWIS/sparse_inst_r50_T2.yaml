@@ -19,4 +19,4 @@ INPUT:
     TYPE: "absolute_range"
     SIZE: (384, 600)
   MASK_FORMAT: "polygon"
-OUTPUT_DIR: "output/t1"
+OUTPUT_DIR: "output/t2"
