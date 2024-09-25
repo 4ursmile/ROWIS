@@ -86,6 +86,7 @@ class SparseInstCriterion(nn.Module):
         self.unknown_class_id = self.num_classes - 1
         self.objectness_threshold = cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD
         self.unknown_loss_weight = cfg.MODEL.OWIS.UNKNOWN_LOSS_WEIGHT
+        self.unmatched_weight = cfg.MODEL.OWIS.UNMATCH_WEIGHT
 
         self.confidence_calibration = ConfidenceCalibration(cfg.MODEL.OWIS.CALIBRATION_TEMPERATURE)
 
@@ -215,7 +216,7 @@ class SparseInstCriterion(nn.Module):
 
 
         # Other unmatched predictions are assigned the empty_weight
-        tgt_iou_scores[unmatched_mask & ~unknown_mask] = self.empty_weight/10
+        tgt_iou_scores[unmatched_mask & ~unknown_mask] = self.unmatched_weight
 
    
 
