@@ -210,7 +210,7 @@ class SparseInstCriterion(nn.Module):
         unknown_mask = (objectness_scores > self.objectness_threshold) & unmatched_mask
 
         # Assign average IoU score to unknown predictions
-        avg_iou = ious.mean()
+        avg_iou = ious.min()
         tgt_iou_scores[unknown_mask] = avg_iou
 
 
