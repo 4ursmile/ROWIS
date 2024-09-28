@@ -302,8 +302,8 @@ def main(args):
 
 
     cfg = setup(args)
-    register_coco_instances("coco_train", {}, base_path_json+"/annotations/instances_train2017.json", base_path_data + "/train2017")
-    register_coco_instances("coco_val", {}, base_path_json + "/annotations/instances_train2017.json", base_path_data + "/val2017")
+    register_coco_instances("coco_train", {}, base_path_json+"/annotations/T1_instance_train_new.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val", {}, base_path_json + "/annotations/T1_instance_val_new.json", base_path_data + "/val2017")
     # OWIS
     # T0
     register_coco_instances("coco_train_T0", {}, base_path_json+"/annotations/T0_instances_train2017.json", base_path_data + "/train2017")
