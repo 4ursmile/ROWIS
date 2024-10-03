@@ -8,7 +8,7 @@ from scipy.optimize import linear_sum_assignment
 from fvcore.nn import sigmoid_focal_loss_jit
 import math
 import copy
-
+from typing import List, Dict, Tuple
 
 from detectron2.utils.registry import Registry
 
@@ -64,6 +64,15 @@ def dice_loss(inputs, targets, reduction='sum'):
     return loss.sum()
 
 
+
+class ConfidenceCalibration(nn.Module):
+    def __init__(self, temperature: float):
+        super().__init__()
+        self.temperature = nn.Parameter(torch.ones(1) * temperature)
+
+    def forward(self, logits: torch.Tensor) -> torch.Tensor:
+        return logits / self.temperature
+
 @SPARSE_INST_CRITERION_REGISTRY.register()
 class SparseInstCriterion(nn.Module):
     def __init__(self, cfg, matcher):
@@ -74,18 +83,23 @@ class SparseInstCriterion(nn.Module):
         self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES 
         self.empty_weight = cfg.MODEL.OWIS.EMPTY_WEIGHT
         self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS+ cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
-        self.top_k_unmatched = 5  # Number of top unmatched predictions to consider
+        self.unknown_class_id = self.num_classes - 1
+        self.objectness_threshold = cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD
+        self.unknown_loss_weight = cfg.MODEL.OWIS.UNKNOWN_LOSS_WEIGHT
+        self.unmatched_weight = cfg.MODEL.OWIS.UNMATCH_WEIGHT
+
+        self.confidence_calibration = ConfidenceCalibration(cfg.MODEL.OWIS.CALIBRATION_TEMPERATURE)
 
     def get_weight_dict(self, cfg):
-        losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness")
+        losses = ("loss_ce", "loss_mask", "loss_dice", "loss_objectness", "loss_unknow")
         weight_dict = {}
         ce_weight = cfg.MODEL.SPARSE_INST.LOSS.CLASS_WEIGHT
         mask_weight = cfg.MODEL.SPARSE_INST.LOSS.MASK_PIXEL_WEIGHT
         dice_weight = cfg.MODEL.SPARSE_INST.LOSS.MASK_DICE_WEIGHT
         objectness_weight = cfg.MODEL.SPARSE_INST.LOSS.OBJECTNESS_WEIGHT
-
+        unknown_weight = cfg.MODEL.OWIS.UNKNOWN_LOSS_WEIGHT
         weight_dict = dict(
-            zip(losses, (ce_weight, mask_weight, dice_weight, objectness_weight)))
+            zip(losses, (ce_weight, mask_weight, dice_weight, objectness_weight, unknown_weight)))
         return weight_dict
 
     def _get_src_permutation_idx(self, indices):
@@ -118,25 +132,14 @@ class SparseInstCriterion(nn.Module):
         matched_mask[idx] = True
         unmatched_mask = ~matched_mask
 
-        # get number of matched instances in each image
-        num_instances_per_image = [len(t["labels"]) for t in targets]
-        # get average number of instances per image
-        avg_num_instances = sum(num_instances_per_image) / len(num_instances_per_image)
-
-        # Get top k unmatched predictions based on objectness score
-        unmatched_objectness_scores = objectness_scores[unmatched_mask]
-
-        # If the result is a 1D tensor, use dim=0 for topk
-        if unmatched_objectness_scores.dim() == 1:
-            top_k_unmatched = torch.topk(unmatched_objectness_scores, 
-                                        k=min(self.top_k_unmatched, unmatched_objectness_scores.size(0), int(avg_num_instances * 0.3)))[1]
-        else:
-            top_k_unmatched = torch.topk(unmatched_objectness_scores, 
-                                        k=min(self.top_k_unmatched, unmatched_objectness_scores.size(1), int(avg_num_instances * 0.3)), 
-                                        dim=1)[1]
         
-        # Assign unknown class (last class) to top k unmatched predictions
-        target_classes[unmatched_mask][top_k_unmatched] = self.num_classes - 1
+
+        # Adaptive thresholding for unknown objects
+        unknown_mask = (objectness_scores > self.objectness_threshold) & unmatched_mask
+        target_classes[unknown_mask] = self.unknown_class_id
+
+        # Apply confidence calibration
+        calibrated_logits = self.confidence_calibration(src_logits)
 
         target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]],
                                             dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device)
@@ -144,9 +147,17 @@ class SparseInstCriterion(nn.Module):
         target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
 
         loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_instances, alpha=0.25,
-                                     num_classes=self.num_classes, empty_weight=self.empty_weight) * src_logits.shape[1]
+                                     num_classes=self.num_classes, empty_weight=self.empty_weight) * calibrated_logits.shape[1]
 
-        losses = {'loss_ce': loss_ce}
+        # Additional loss for unknown class
+        unknown_logits = calibrated_logits[:, :, self.unknown_class_id]
+        unknown_targets = (target_classes == self.unknown_class_id).float()
+        loss_unknown = F.binary_cross_entropy_with_logits(unknown_logits, unknown_targets, reduction='mean')
+
+        losses = {
+            'loss_ce': loss_ce,
+            'loss_unknown': loss_unknown 
+        }
         return losses
 
     def loss_masks_with_iou_objectness(self, outputs, targets, indices, num_instances, input_shape):
@@ -194,29 +205,21 @@ class SparseInstCriterion(nn.Module):
         unmatched_mask = torch.ones(src_iou_scores.shape[:2], dtype=torch.bool, device=src_iou_scores.device)
         unmatched_mask[src_idx[0], src_idx[1]] = False
 
-        # get number of matched instances in each image
-        num_instances_per_image = [len(t["labels"]) for t in targets]
-        # get average number of instances per image
-        avg_num_instances = sum(num_instances_per_image) / len(num_instances_per_image)
-        # Get top k unmatched predictions based on objectness score
+        # Adaptive thresholding for unknown objects
         objectness_scores = src_iou_scores.sigmoid().flatten(1)
-        unmatched_objectness_scores = objectness_scores[unmatched_mask]
-        # If the result is a 1D tensor, use dim=0 for topk
-        if unmatched_objectness_scores.dim() == 1:
-            top_k_unmatched = torch.topk(unmatched_objectness_scores, 
-                                        k=min(self.top_k_unmatched, unmatched_objectness_scores.size(0), int(avg_num_instances * 0.3)))[1]
-        else:
-            top_k_unmatched = torch.topk(unmatched_objectness_scores, 
-                                        k=min(self.top_k_unmatched, unmatched_objectness_scores.size(1), int(avg_num_instances * 0.3)), 
-                                        dim=1)[1]
+        unknown_mask = (objectness_scores > self.objectness_threshold) & unmatched_mask
+
+        # Assign average IoU score to unknown predictions
+        avg_iou = ious.min()
+        tgt_iou_scores[unknown_mask] = avg_iou
+
 
 
         # Other unmatched predictions are assigned the empty_weight
-        tgt_iou_scores[unmatched_mask][~top_k_unmatched] = self.empty_weight
+        tgt_iou_scores[unmatched_mask & ~unknown_mask] = self.unmatched_weight
 
-         # Assign average IoU score to top k unmatched predictions
-        avg_iou = ious.mean()
-        tgt_iou_scores[unmatched_mask][top_k_unmatched] = avg_iou
+   
+
 
         tgt_iou_scores = tgt_iou_scores.flatten(0)
         src_iou_scores = src_iou_scores.flatten(0)
@@ -224,7 +227,7 @@ class SparseInstCriterion(nn.Module):
         losses = {
             "loss_objectness": F.binary_cross_entropy_with_logits(src_iou_scores, tgt_iou_scores, reduction='mean'),
             "loss_dice": dice_loss(src_masks, target_masks) / num_instances,
-            "loss_mask": F.binary_cross_entropy_with_logits(src_masks, target_masks, reduction='mean')
+            "loss_mask": F.binary_cross_entropy_with_logits(src_masks, target_masks, reduction='mean'),
         }
         return losses
 
@@ -354,7 +357,7 @@ class SparseInstMatcher(nn.Module):
 
             pred_masks = pred_masks.view(B * N, -1)
             tgt_masks = tgt_masks.flatten(1)
-            with autocast(enabled=False):
+            with torch.autocast("cuda", enabled=False):
                 pred_masks = pred_masks.float()
                 tgt_masks = tgt_masks.float()
                 pred_logits = pred_logits.float()

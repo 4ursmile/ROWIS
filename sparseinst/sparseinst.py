@@ -136,7 +136,8 @@ class SparseInst(nn.Module):
         self.invalid_cls_logits = list(range(cfg.MODEL.OWIS.PREV_INTRODUCED_CLS + cfg.MODEL.OWIS.CUR_INTRODUCED_CLS, self.num_classes-1))
         self.temperature = cfg.MODEL.OWIS.TEMPERATURE
         self.pred_per_image = cfg.MODEL.OWIS.PRED_PER_IMAGE
-        self.temperature = cfg.MODEL.OWIS.TEMPERATURE/cfg.MODEL.OWIS.HIDDEN_DIM
+
+        self.num_classes = cfg.MODEL.SPARSE_INST.DECODER.NUM_CLASSES
         print(f"Number of parameters: {parameter_count_table(self, 3)}")
     def normalizer(self, image):
         image = (image - self.pixel_mean) / self.pixel_std
@@ -211,7 +212,7 @@ class SparseInst(nn.Module):
         return pred_scores, pred_masks
 
     def inference(self, output, batched_inputs, max_shape, image_sizes):
-        # max_detections = self.max_detections
+        max_detections = self.max_detections
         results = []
         temp_src_logits = output["pred_logits"].clone()
         pred_masks = output["pred_masks"].sigmoid()

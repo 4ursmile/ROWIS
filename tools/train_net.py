@@ -64,6 +64,32 @@ sys.path.append(".")
 from sparseinst import add_sparse_inst_config, COCOMaskEvaluator
 
 
+class ObjectnessThresholdScheduler:
+    def __init__(self, start_value, end_value, total_iterations):
+        self.start_value = start_value
+        self.end_value = end_value
+        self.total_iterations = total_iterations
+
+    def __call__(self, iteration):
+        return self.start_value + (self.end_value - self.start_value) * min(iteration / self.total_iterations, 1.0)
+
+# Detectron2 Hook for updating parameters
+class ParameterSchedulerHook:
+    def __init__(self, cfg):
+        self.objectness_scheduler = ObjectnessThresholdScheduler(
+            cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD_START,
+            cfg.MODEL.OWIS.OBJECTNESS_THRESHOLD_END,
+            cfg.SOLVER.MAX_ITER
+        )
+
+    def before_step(self, model):
+        iteration = model.iter
+        model.criterion.objectness_threshold = self.objectness_scheduler(iteration)
+
+def add_sparseinst_hooks(cfg, trainer):
+    trainer.register_hooks([ParameterSchedulerHook(cfg)])
+    return trainer
+
 class Trainer(DefaultTrainer):
 
     @classmethod
@@ -270,30 +296,30 @@ def parameter_count_table(model: nn.Module, max_depth: int = 3) -> str:
 
 def main(args):
     os.system("nvidia-smi")
-    base_path_data = '/kaggle/input/coco-2017-dataset/coco2017'
+    base_path_data = './datasets/coco2017'
     base_path_json = './datasets/OWIS'
     
 
 
     cfg = setup(args)
-    register_coco_instances("coco_train", {}, base_path_json+"/annotations/instances_train2017.json", base_path_data + "/train2017")
-    register_coco_instances("coco_val", {}, base_path_json + "/annotations/instances_train2017.json", base_path_data + "/val2017")
+    register_coco_instances("coco_train", {}, base_path_json+"/annotations/T1_instance_train_new.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val", {}, base_path_json + "/annotations/T1_instance_val_new.json", base_path_data + "/val2017")
     # OWIS
     # T0
     register_coco_instances("coco_train_T0", {}, base_path_json+"/annotations/T0_instances_train2017.json", base_path_data + "/train2017")
-    register_coco_instances("coco_val_T0", {}, base_path_json + "/annotations/T0_instances_val2017.json", base_path_data + "/val2017")
+    register_coco_instances("coco_val_T0", {}, base_path_json + "/annotations/T1_instance_val_new.json", base_path_data + "/val2017")
     # T1
-    register_coco_instances("coco_train_T1", {}, base_path_json+"/annotations/T1_instances_train2017.json", base_path_data + "/train2017")
-    register_coco_instances("coco_val_T1", {}, base_path_json + "/annotations/T1_instances_val2017.json", base_path_data + "/val2017")
+    register_coco_instances("coco_train_T1", {}, base_path_json+"/annotations/T1_instance_train_new.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val_T1", {}, base_path_json + "/annotations/T1_instance_val_new.json", base_path_data + "/val2017")
     # T2
-    register_coco_instances("coco_train_T2", {}, base_path_json+"/annotations/T2_instances_train2017.json", base_path_data + "/train2017")
-    register_coco_instances("coco_val_T2", {}, base_path_json + "/annotations/T2_instances_val2017.json", base_path_data + "/val2017")
+    register_coco_instances("coco_train_T2", {}, base_path_json+"/annotations/T2_instance_train_new.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val_T2", {}, base_path_json + "/annotations/T2_instance_val_new.json", base_path_data + "/val2017")
     # T3
-    register_coco_instances("coco_train_T3", {}, base_path_json+"/annotations/T3_instances_train2017.json", base_path_data + "/train2017")
-    register_coco_instances("coco_val_T3", {}, base_path_json + "/annotations/T3_instances_val2017.json", base_path_data + "/val2017")
+    register_coco_instances("coco_train_T3", {}, base_path_json+"/annotations/T3_instance_train_new.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val_T3", {}, base_path_json + "/annotations/T3_instance_val_new.json", base_path_data + "/val2017")
     # T4
-    register_coco_instances("coco_train_T4", {}, base_path_json+"/annotations/T4_instances_train2017.json", base_path_data + "/train2017")
-    register_coco_instances("coco_val_T4", {}, base_path_json + "/annotations/T4_instances_val2017.json", base_path_data + "/val2017")
+    register_coco_instances("coco_train_T4", {}, base_path_json+"/annotations/T4_instance_train_new.json", base_path_data + "/train2017")
+    register_coco_instances("coco_val_T4", {}, base_path_json + "/annotations/T4_instance_val_new.json", base_path_data + "/val2017")
     if args.eval_only:
         model = Trainer.build_model(cfg)
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(

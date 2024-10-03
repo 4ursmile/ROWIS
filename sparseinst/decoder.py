@@ -302,7 +302,7 @@ class BaseIAMDecoder(nn.Module):
     def forward(self, features):
         coord_features = self.compute_coordinates(features)
         features = torch.cat([coord_features, features], dim=1)
-        pred_logits, pred_kernel, pred_scores, iam = self.inst_branch(features)
+        pred_logits, pred_kernel, pred_scores, iam= self.inst_branch(features)
         mask_features = self.mask_branch(features)
 
         N = pred_kernel.shape[1]
