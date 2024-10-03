@@ -1,5 +1,5 @@
 #!/bin/bash
-python tools/train_net.py --config-file configs/OWIS/sparse_inst_r50_T1.yaml --num-gpus 2 --resume MODEL.WEIGHTS pretrained_models/model_final_t0_raw.pth
+python tools/train_net.py --config-file configs/OWIS/sparse_inst_r50_T1.yaml --num-gpus 2 
 
 python tools/train_net.py --config-file configs/OWIS/sparse_inst_r50_T2.yaml --num-gpus 2 --resume MODEL.WEIGHTS output/t1/model_final.pth
 
