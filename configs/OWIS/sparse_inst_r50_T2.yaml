@@ -1,6 +1,11 @@
 _BASE_: "Base-SparseInst.yaml"
 MODEL:
-  WEIGHTS: "pretrained_models/R-50.pkl"
+  WEIGHTS: "pretrained_models/resnet50d_ra2-464e36ba.pth"
+  BACKBONE:
+    FREEZE_AT: 0
+    NAME: "build_resnet_vd_backbone"
+  RESNETS:
+    DEFORM_ON_PER_STAGE: [False, False, True, True] # dcn on res4, res5
   OWIS:
     HIDDEN_DIM: 1024
     PREV_INTRODUCED_CLS: 20
