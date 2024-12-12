@@ -274,7 +274,7 @@ class SparseInstCriterion(nn.Module):
 
         return losses
 
-@SPARSE_INST_CRITERION_REGISTRY_VIL.register()
+@SPARSE_INST_CRITERION_REGISTRY.register()
 class SparseInstCriterionVIL(nn.Module):
     # This part is partially derivated from: https://github.com/facebookresearch/detr/blob/main/models/detr.py
 
