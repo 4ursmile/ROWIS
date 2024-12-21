@@ -372,9 +372,18 @@ class GroupInstanceBranch(nn.Module):
         c2_msra_fill(self.iam_conv)
         # for module in [self.iam_conv, self.cls_score]:
         #     init.constant_(module.bias, bias_value)
-        self.cls_score.init_weights()
-        self.mask_kernel.init_weights()
-        self.objectness.init_weights()
+        if hasattr(self.cls_score, 'init_weights'):
+            self.cls_score.init_weights()
+        elif isinstance(self.cls_score, nn.Linear):
+            init.normal_(self.cls_score.weight, std=0.01)
+        if hasattr(self.mask_kernel, 'init_weights'):
+            self.mask_kernel.init_weights()
+        elif isinstance(self.mask_kernel, nn.Linear):
+            init.normal_(self.mask_kernel.weight, std=0.01)
+        if hasattr(self.objectness, 'init_weights'):
+            self.objectness.init_weights()
+        elif isinstance(self.objectness, nn.Linear):
+            init.normal_(self.objectness.weight, std=0.01)
 
     def forward(self, features):
             # instance features (x4 convs)
