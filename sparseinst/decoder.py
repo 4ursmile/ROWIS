@@ -246,7 +246,7 @@ class MaskBranch(nn.Module):
         dim = cfg.MODEL.SPARSE_INST.DECODER.MASK.DIM
         num_convs = cfg.MODEL.SPARSE_INST.DECODER.MASK.CONVS
         kernel_dim = cfg.MODEL.SPARSE_INST.DECODER.KERNEL_DIM
-        self.mask_convs = _make_stack_3x3_convs_mask(num_convs, in_channels, dim)
+        self.mask_convs = _make_stack_3x3_convs_mask(num_convs, in_channels, dim) if cfg.MODEL.OWIS.USE_ATTENTION else _make_stack_3x3_convs(num_convs, in_channels, dim)
         self.projection = nn.Conv2d(dim, kernel_dim, kernel_size=1)
         self._init_weights()
 
