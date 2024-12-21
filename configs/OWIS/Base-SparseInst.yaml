@@ -33,6 +33,7 @@ MODEL:
     CONTRASTIVE_LOSS_WEIGHT: 1
     UNKNOWN_LOSS_WEIGHT: 1.5
     USE_ATTENTION: False
+    USE_MLP: False  
 DATASETS:
   TRAIN: ("coco_train",)
   TEST:  ("coco_val",)

@@ -353,11 +353,11 @@ class GroupInstanceBranch(nn.Module):
             dim, num_masks * self.num_groups, 3, padding=1, groups=self.num_groups)
         self.fc = nn.Linear(expand_dim, expand_dim)
         self.cls_score = MLP(
-            expand_dim, objectness_hidden_dim, self.num_classes, objectness_depth-1, sigmoid_output=False)
+            expand_dim, objectness_hidden_dim, self.num_classes, objectness_depth-1, sigmoid_output=False) if cfg.MODEL.OWIS.USE_MLP else nn.Linear(expand_dim, self.num_classes)
         self.mask_kernel = MLP(
-            expand_dim, objectness_hidden_dim, kernel_dim, objectness_depth-1, sigmoid_output=False)
+            expand_dim, objectness_hidden_dim, kernel_dim, objectness_depth-1, sigmoid_output=False) if cfg.MODEL.OWIS.USE_MLP else nn.Linear(expand_dim, kernel_dim)
         self.objectness = MLP(
-            expand_dim, objectness_hidden_dim, 1, objectness_depth, sigmoid_output=False)
+            expand_dim, objectness_hidden_dim, 1, objectness_depth, sigmoid_output=False) if cfg.MODEL.OWIS.USE_MLP else nn.Linear(expand_dim, 1)
         self.prior_prob = 0.01
         self._init_weights()
 
