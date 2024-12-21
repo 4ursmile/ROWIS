@@ -32,8 +32,8 @@ MODEL:
     OBJECTNESS_THRESHOLD: 0.2
     CONTRASTIVE_LOSS_WEIGHT: 1
     UNKNOWN_LOSS_WEIGHT: 1.5
-    USE_ATTENTION: False
-    USE_MLP: False  
+    USE_ATTENTION: True
+    USE_MLP: True
 DATASETS:
   TRAIN: ("coco_train",)
   TEST:  ("coco_val",)
